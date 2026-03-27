@@ -1,8 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Box, Paper, Typography } from "@mui/material";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Box, Button, FormControlLabel, Paper, Switch, Typography } from "@mui/material";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import UndoIcon from "@mui/icons-material/Undo";
+import RedoIcon from "@mui/icons-material/Redo";
 import wordsData from '../data/words.json';
+import { byFrequency } from "../utils/sorters";
+import { sortCandidates } from "../utils/wordScorer";
 
 type ColorState = "default" | "grey" | "yellow" | "green";
 
@@ -11,8 +16,29 @@ interface CellData {
   color: ColorState;
 }
 
-const ROWS = 6;
+interface GameSnapshot {
+  grid: CellData[][];
+  currentRow: number;
+  currentCol: number;
+}
+
+const GUESS_ROWS = 6;
+const SUGGESTION_ROWS = 10;
+const ROWS = GUESS_ROWS + SUGGESTION_ROWS;
 const COLS = 5;
+const KEYBOARD_ROWS = [
+  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+  ["Enter", "Z", "X", "C", "V", "B", "N", "M", "Backspace"],
+] as const;
+
+const createEmptyGrid = () =>
+  Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => ({ letter: "", color: "default" as ColorState }))
+  );
+
+const cloneGrid = (source: CellData[][]) =>
+  source.map((row) => row.map((cell) => ({ ...cell })));
 
 const getColorCode = (color: ColorState) => {
   switch (color) {
@@ -38,28 +64,69 @@ const getBorderColor = (color: ColorState, letter: string) => {
 };
 
 export default function GameGrid() {
-  const [grid, setGrid] = useState<CellData[][]>(
-    Array.from({ length: ROWS }, () =>
-      Array.from({ length: COLS }, () => ({ letter: "", color: "default" }))
-    )
-  );
+  const [showPossibleWords, setShowPossibleWords] = useState(false);
+  const [grid, setGrid] = useState<CellData[][]>(createEmptyGrid);
   const [currentRow, setCurrentRow] = useState(0);
   const [currentCol, setCurrentCol] = useState(0);
+  const [pastSnapshots, setPastSnapshots] = useState<GameSnapshot[]>([]);
+  const [futureSnapshots, setFutureSnapshots] = useState<GameSnapshot[]>([]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture when user holds command/ctrl so they can refresh
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const getSnapshot = useCallback(
+    (): GameSnapshot => ({
+      grid: cloneGrid(grid),
+      currentRow,
+      currentCol,
+    }),
+    [grid, currentRow, currentCol]
+  );
 
-      if (e.key === "Enter") {
-        if (currentCol === COLS && currentRow < ROWS - 1) {
+  const applySnapshot = useCallback((snapshot: GameSnapshot) => {
+    setGrid(cloneGrid(snapshot.grid));
+    setCurrentRow(snapshot.currentRow);
+    setCurrentCol(snapshot.currentCol);
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setGrid(createEmptyGrid());
+    setCurrentRow(0);
+    setCurrentCol(0);
+    setPastSnapshots([]);
+    setFutureSnapshots([]);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (pastSnapshots.length === 0) return;
+
+    const previous = pastSnapshots[pastSnapshots.length - 1];
+    setPastSnapshots((prev) => prev.slice(0, -1));
+    setFutureSnapshots((prev) => [getSnapshot(), ...prev]);
+    applySnapshot(previous);
+  }, [applySnapshot, getSnapshot, pastSnapshots]);
+
+  const handleRedo = useCallback(() => {
+    if (futureSnapshots.length === 0) return;
+
+    const [next, ...rest] = futureSnapshots;
+    setPastSnapshots((prev) => [...prev, getSnapshot()]);
+    setFutureSnapshots(rest);
+    applySnapshot(next);
+  }, [applySnapshot, futureSnapshots, getSnapshot]);
+
+  const handleGameKey = useCallback(
+    (rawKey: string) => {
+      const key = rawKey.length === 1 ? rawKey.toUpperCase() : rawKey;
+
+      if (key === "Enter") {
+        if (currentCol === COLS && currentRow < GUESS_ROWS - 1) {
+          setPastSnapshots((prev) => [...prev, getSnapshot()]);
+          setFutureSnapshots([]);
           setCurrentRow((prev) => prev + 1);
           setCurrentCol(0);
         }
         return;
       }
 
-      if (e.key === "Backspace") {
+      if (key === "Backspace") {
         if (currentCol > 0) {
           setGrid((prev) => {
             const newGrid = [...prev];
@@ -72,25 +139,57 @@ export default function GameGrid() {
         return;
       }
 
-      if (/^[a-zA-Z]$/.test(e.key)) {
+      if (/^[A-Z]$/.test(key)) {
         if (currentCol < COLS && currentRow < ROWS) {
           setGrid((prev) => {
             const newGrid = [...prev];
             newGrid[currentRow] = [...newGrid[currentRow]];
+            const typedLetter = key;
+            let autoColor: ColorState = "default";
+
+            // If this column is already green in prior submitted rows, auto-mark
+            // the same letter as green while typing to reduce repetitive clicks.
+            for (let r = 0; r < currentRow; r++) {
+              const lockedCell = prev[r][currentCol];
+              if (lockedCell.color === "green" && lockedCell.letter === typedLetter) {
+                autoColor = "green";
+                break;
+              }
+            }
+
             newGrid[currentRow][currentCol] = {
-              letter: e.key.toUpperCase(),
-              color: "default",
+              letter: typedLetter,
+              color: autoColor,
             };
             return newGrid;
           });
           setCurrentCol((prev) => prev + 1);
         }
       }
+    },
+    [currentCol, currentRow]
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't capture when user holds command/ctrl so they can refresh
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Let focused inputs handle their own key events to avoid double handling.
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+
+      handleGameKey(e.key);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentRow, currentCol]);
+  }, [handleGameKey]);
 
   const toggleColor = (r: number, c: number) => {
     // Only allow toggling color if there's a letter
@@ -106,21 +205,24 @@ export default function GameGrid() {
       if (currentColor === "default") nextColor = "yellow";
       else if (currentColor === "yellow") nextColor = "green";
       else if (currentColor === "green") nextColor = "default";
-      console.log(`current color: ${currentColor}, next color: ${nextColor}`)
 
       newGrid[r][c] = { ...newGrid[r][c], color: nextColor };
       return newGrid;
     });
   };
 
-  const { candidates, greens } = useMemo(() => {
+  const submittedRows = useMemo(() => grid.slice(0, currentRow), [grid, currentRow]);
+
+  const { candidates, greens, possibleSolutions } = useMemo(() => {
     const greens: (string | null)[] = [null, null, null, null, null];
     const yellows: { char: string; pos: number }[] = [];
     const greys: { char: string; pos: number }[] = [];
 
-    for (let r = 0; r < ROWS; r++) {
+    // Only process submitted rows (rows before the current row)
+    // This way, gray cells only filter after pressing enter
+    for (let r = 0; r < submittedRows.length; r++) {
       for (let c = 0; c < COLS; c++) {
-        const cell = grid[r][c];
+        const cell = submittedRows[r][c];
         if (!cell.letter) continue;
 
         const char = cell.letter.toLowerCase();
@@ -154,7 +256,7 @@ export default function GameGrid() {
 
         let foundValidPosition = false;
         for (let j = 0; j < COLS; j++) {
-          if (w[j] === y.char && j !== y.pos && greens[j] === null) {
+          if (w[j] === y.char && j !== y.pos) {
             foundValidPosition = true;
             break;
           }
@@ -164,6 +266,7 @@ export default function GameGrid() {
 
       // Check greys
       for (const g of greys) {
+        // A gray tile always means this exact position cannot contain the letter.
         if (w[g.pos] === g.char) return false;
 
         const isAlsoGreenOrYellow = greens.includes(g.char) || yellows.some(y => y.char === g.char);
@@ -184,20 +287,71 @@ export default function GameGrid() {
 
       return true;
     });
-    return { candidates: filtered, greens };
-  }, [grid]);
+
+    // Rank suggestions using shared heuristics first, then positional scoring.
+    const candidates = sortCandidates(byFrequency(filtered));
+    const possibleSolutions = [...filtered].sort();
+
+    return { candidates, greens, possibleSolutions };
+  }, [submittedRows]);
 
   return (
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        gap: 1,
-        p: 2,
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        gap: 0,
       }}
     >
-      {grid.map((row, rIdx) => {
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1,
+          p: 2,
+          pb: "340px",
+        }}
+      >
+        <Box
+          sx={{
+            width: "100%",
+            maxWidth: 560,
+            display: "flex",
+            justifyContent: "center",
+            gap: 1,
+            mb: 1,
+            flexWrap: "wrap",
+          }}
+        >
+          <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleReset}>
+            Reset
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UndoIcon />}
+            onClick={handleUndo}
+            disabled={pastSnapshots.length === 0}
+          >
+            Undo
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<RedoIcon />}
+            onClick={handleRedo}
+            disabled={futureSnapshots.length === 0}
+          >
+            Redo
+          </Button>
+        </Box>
+
+        {grid.map((row, rIdx) => {
         const isCandidateRow = rIdx > currentRow && candidates.length > (rIdx - currentRow - 1);
         const candidateWord = isCandidateRow ? candidates[rIdx - currentRow - 1] : null;
 
@@ -250,6 +404,7 @@ export default function GameGrid() {
             {row.map((cell, cIdx) => (
               <Paper
                 key={cIdx}
+                data-testid={`cell-${rIdx}-${cIdx}`}
                 elevation={0}
                 onClick={() => toggleColor(rIdx, cIdx)}
                 sx={{
@@ -278,7 +433,98 @@ export default function GameGrid() {
         Type to enter letters. Click on a letter to cycle through colors (Grey, Yellow, Green). Press Enter to submit row.
       </Typography>
 
+      <Box sx={{ width: "100%", maxWidth: 720, mt: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showPossibleWords}
+              onChange={(e) => setShowPossibleWords(e.target.checked)}
+              size="small"
+            />
+          }
+          label={`Debug: show all possible solutions (${possibleSolutions.length})`}
+          sx={{ color: "text.secondary" }}
+        />
 
+        {showPossibleWords && (
+          <Box
+            sx={{
+              mt: 1,
+              p: 1.5,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              maxHeight: 220,
+              overflowY: "auto",
+              backgroundColor: "rgba(255,255,255,0.03)",
+              fontFamily: "monospace",
+              fontSize: "0.875rem",
+              lineHeight: 1.5,
+              color: "text.secondary",
+            }}
+          >
+            {possibleSolutions.join(", ") || "No possible solutions with current constraints."}
+          </Box>
+        )}
+      </Box>
+      </Box>
+
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          width: "100%",
+          bgcolor: "background.paper",
+          boxShadow: "0 -2px 8px rgba(0,0,0,0.1)",
+          zIndex: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1,
+          p: 2,
+        }}
+      >
+        <Box sx={{ width: "100%", maxWidth: 560, userSelect: "none" }}>
+          {KEYBOARD_ROWS.map((row, rowIndex) => (
+            <Box
+              key={`kb-row-${rowIndex}`}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                gap: 0.5,
+                mb: 0.5,
+              }}
+            >
+              {row.map((key) => {
+                const isWide = key === "Enter" || key === "Backspace";
+                return (
+                  <Button
+                    key={key}
+                    variant="contained"
+                    onClick={() => {
+                      handleGameKey(key);
+                    }}
+                    sx={{
+                      minWidth: isWide ? 62 : 34,
+                      px: isWide ? 1 : 0,
+                      height: 44,
+                      fontSize: isWide ? "0.72rem" : "0.9rem",
+                      fontWeight: 700,
+                      textTransform: "none",
+                      bgcolor: "#818384",
+                      color: "#fff",
+                      '&:hover': { bgcolor: "#6f7172" },
+                    }}
+                    aria-label={key === "Backspace" ? "Backspace" : key}
+                  >
+                    {key === "Backspace" ? "⌫" : key}
+                  </Button>
+                );
+              })}
+            </Box>
+          ))}
+        </Box>
+      </Box>
     </Box>
   );
 }
