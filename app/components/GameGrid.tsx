@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Box, Paper, Typography } from "@mui/material";
+import { Box, FormControlLabel, Paper, Switch, Typography } from "@mui/material";
 import wordsData from '../data/words.json';
+import { byFrequency } from "../utils/sorters";
+import { sortCandidates } from "../utils/wordScorer";
 
 type ColorState = "default" | "grey" | "yellow" | "green";
 
@@ -11,7 +13,9 @@ interface CellData {
   color: ColorState;
 }
 
-const ROWS = 6;
+const GUESS_ROWS = 6;
+const SUGGESTION_ROWS = 10;
+const ROWS = GUESS_ROWS + SUGGESTION_ROWS;
 const COLS = 5;
 
 const getColorCode = (color: ColorState) => {
@@ -38,6 +42,7 @@ const getBorderColor = (color: ColorState, letter: string) => {
 };
 
 export default function GameGrid() {
+  const [showPossibleWords, setShowPossibleWords] = useState(false);
   const [grid, setGrid] = useState<CellData[][]>(
     Array.from({ length: ROWS }, () =>
       Array.from({ length: COLS }, () => ({ letter: "", color: "default" }))
@@ -52,7 +57,7 @@ export default function GameGrid() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === "Enter") {
-        if (currentCol === COLS && currentRow < ROWS - 1) {
+        if (currentCol === COLS && currentRow < GUESS_ROWS - 1) {
           setCurrentRow((prev) => prev + 1);
           setCurrentCol(0);
         }
@@ -77,9 +82,22 @@ export default function GameGrid() {
           setGrid((prev) => {
             const newGrid = [...prev];
             newGrid[currentRow] = [...newGrid[currentRow]];
+            const typedLetter = e.key.toUpperCase();
+            let autoColor: ColorState = "default";
+
+            // If this column is already green in prior submitted rows, auto-mark
+            // the same letter as green while typing to reduce repetitive clicks.
+            for (let r = 0; r < currentRow; r++) {
+              const lockedCell = prev[r][currentCol];
+              if (lockedCell.color === "green" && lockedCell.letter === typedLetter) {
+                autoColor = "green";
+                break;
+              }
+            }
+
             newGrid[currentRow][currentCol] = {
-              letter: e.key.toUpperCase(),
-              color: "default",
+              letter: typedLetter,
+              color: autoColor,
             };
             return newGrid;
           });
@@ -106,19 +124,20 @@ export default function GameGrid() {
       if (currentColor === "default") nextColor = "yellow";
       else if (currentColor === "yellow") nextColor = "green";
       else if (currentColor === "green") nextColor = "default";
-      console.log(`current color: ${currentColor}, next color: ${nextColor}`)
 
       newGrid[r][c] = { ...newGrid[r][c], color: nextColor };
       return newGrid;
     });
   };
 
-  const { candidates, greens } = useMemo(() => {
+  const { candidates, greens, possibleSolutions } = useMemo(() => {
     const greens: (string | null)[] = [null, null, null, null, null];
     const yellows: { char: string; pos: number }[] = [];
     const greys: { char: string; pos: number }[] = [];
 
-    for (let r = 0; r < ROWS; r++) {
+    // Only process submitted rows (rows before the current row)
+    // This way, gray cells only filter after pressing enter
+    for (let r = 0; r < currentRow; r++) {
       for (let c = 0; c < COLS; c++) {
         const cell = grid[r][c];
         if (!cell.letter) continue;
@@ -154,7 +173,7 @@ export default function GameGrid() {
 
         let foundValidPosition = false;
         for (let j = 0; j < COLS; j++) {
-          if (w[j] === y.char && j !== y.pos && greens[j] === null) {
+          if (w[j] === y.char && j !== y.pos) {
             foundValidPosition = true;
             break;
           }
@@ -164,8 +183,6 @@ export default function GameGrid() {
 
       // Check greys
       for (const g of greys) {
-        if (w[g.pos] === g.char) return false;
-
         const isAlsoGreenOrYellow = greens.includes(g.char) || yellows.some(y => y.char === g.char);
 
         if (!isAlsoGreenOrYellow) {
@@ -184,8 +201,13 @@ export default function GameGrid() {
 
       return true;
     });
-    return { candidates: filtered, greens };
-  }, [grid]);
+
+    // Rank suggestions using shared heuristics first, then positional scoring.
+    const candidates = sortCandidates(byFrequency(filtered));
+    const possibleSolutions = [...filtered].sort();
+
+    return { candidates, greens, possibleSolutions };
+  }, [grid, currentRow]);
 
   return (
     <Box
@@ -250,6 +272,7 @@ export default function GameGrid() {
             {row.map((cell, cIdx) => (
               <Paper
                 key={cIdx}
+                data-testid={`cell-${rIdx}-${cIdx}`}
                 elevation={0}
                 onClick={() => toggleColor(rIdx, cIdx)}
                 sx={{
@@ -277,6 +300,41 @@ export default function GameGrid() {
       <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary', textAlign: 'center' }}>
         Type to enter letters. Click on a letter to cycle through colors (Grey, Yellow, Green). Press Enter to submit row.
       </Typography>
+
+      <Box sx={{ width: "100%", maxWidth: 720, mt: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showPossibleWords}
+              onChange={(e) => setShowPossibleWords(e.target.checked)}
+              size="small"
+            />
+          }
+          label={`Debug: show all possible solutions (${possibleSolutions.length})`}
+          sx={{ color: "text.secondary" }}
+        />
+
+        {showPossibleWords && (
+          <Box
+            sx={{
+              mt: 1,
+              p: 1.5,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              maxHeight: 220,
+              overflowY: "auto",
+              backgroundColor: "rgba(255,255,255,0.03)",
+              fontFamily: "monospace",
+              fontSize: "0.875rem",
+              lineHeight: 1.5,
+              color: "text.secondary",
+            }}
+          >
+            {possibleSolutions.join(", ") || "No possible solutions with current constraints."}
+          </Box>
+        )}
+      </Box>
 
 
     </Box>
