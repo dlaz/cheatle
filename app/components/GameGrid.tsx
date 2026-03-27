@@ -2,6 +2,9 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, Button, FormControlLabel, Paper, Switch, Typography } from "@mui/material";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import UndoIcon from "@mui/icons-material/Undo";
+import RedoIcon from "@mui/icons-material/Redo";
 import wordsData from '../data/words.json';
 import { byFrequency } from "../utils/sorters";
 import { sortCandidates } from "../utils/wordScorer";
@@ -13,6 +16,12 @@ interface CellData {
   color: ColorState;
 }
 
+interface GameSnapshot {
+  grid: CellData[][];
+  currentRow: number;
+  currentCol: number;
+}
+
 const GUESS_ROWS = 6;
 const SUGGESTION_ROWS = 10;
 const ROWS = GUESS_ROWS + SUGGESTION_ROWS;
@@ -22,6 +31,14 @@ const KEYBOARD_ROWS = [
   ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
   ["Enter", "Z", "X", "C", "V", "B", "N", "M", "Backspace"],
 ] as const;
+
+const createEmptyGrid = () =>
+  Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => ({ letter: "", color: "default" as ColorState }))
+  );
+
+const cloneGrid = (source: CellData[][]) =>
+  source.map((row) => row.map((cell) => ({ ...cell })));
 
 const getColorCode = (color: ColorState) => {
   switch (color) {
@@ -48,13 +65,52 @@ const getBorderColor = (color: ColorState, letter: string) => {
 
 export default function GameGrid() {
   const [showPossibleWords, setShowPossibleWords] = useState(false);
-  const [grid, setGrid] = useState<CellData[][]>(
-    Array.from({ length: ROWS }, () =>
-      Array.from({ length: COLS }, () => ({ letter: "", color: "default" }))
-    )
-  );
+  const [grid, setGrid] = useState<CellData[][]>(createEmptyGrid);
   const [currentRow, setCurrentRow] = useState(0);
   const [currentCol, setCurrentCol] = useState(0);
+  const [pastSnapshots, setPastSnapshots] = useState<GameSnapshot[]>([]);
+  const [futureSnapshots, setFutureSnapshots] = useState<GameSnapshot[]>([]);
+
+  const getSnapshot = useCallback(
+    (): GameSnapshot => ({
+      grid: cloneGrid(grid),
+      currentRow,
+      currentCol,
+    }),
+    [grid, currentRow, currentCol]
+  );
+
+  const applySnapshot = useCallback((snapshot: GameSnapshot) => {
+    setGrid(cloneGrid(snapshot.grid));
+    setCurrentRow(snapshot.currentRow);
+    setCurrentCol(snapshot.currentCol);
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setGrid(createEmptyGrid());
+    setCurrentRow(0);
+    setCurrentCol(0);
+    setPastSnapshots([]);
+    setFutureSnapshots([]);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (pastSnapshots.length === 0) return;
+
+    const previous = pastSnapshots[pastSnapshots.length - 1];
+    setPastSnapshots((prev) => prev.slice(0, -1));
+    setFutureSnapshots((prev) => [getSnapshot(), ...prev]);
+    applySnapshot(previous);
+  }, [applySnapshot, getSnapshot, pastSnapshots]);
+
+  const handleRedo = useCallback(() => {
+    if (futureSnapshots.length === 0) return;
+
+    const [next, ...rest] = futureSnapshots;
+    setPastSnapshots((prev) => [...prev, getSnapshot()]);
+    setFutureSnapshots(rest);
+    applySnapshot(next);
+  }, [applySnapshot, futureSnapshots, getSnapshot]);
 
   const handleGameKey = useCallback(
     (rawKey: string) => {
@@ -62,6 +118,8 @@ export default function GameGrid() {
 
       if (key === "Enter") {
         if (currentCol === COLS && currentRow < GUESS_ROWS - 1) {
+          setPastSnapshots((prev) => [...prev, getSnapshot()]);
+          setFutureSnapshots([]);
           setCurrentRow((prev) => prev + 1);
           setCurrentCol(0);
         }
@@ -237,13 +295,16 @@ export default function GameGrid() {
       sx={{
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
         gap: 0,
       }}
     >
       <Box
         sx={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
@@ -253,6 +314,38 @@ export default function GameGrid() {
           pb: "340px",
         }}
       >
+        <Box
+          sx={{
+            width: "100%",
+            maxWidth: 560,
+            display: "flex",
+            justifyContent: "center",
+            gap: 1,
+            mb: 1,
+            flexWrap: "wrap",
+          }}
+        >
+          <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleReset}>
+            Reset
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UndoIcon />}
+            onClick={handleUndo}
+            disabled={pastSnapshots.length === 0}
+          >
+            Undo
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<RedoIcon />}
+            onClick={handleRedo}
+            disabled={futureSnapshots.length === 0}
+          >
+            Redo
+          </Button>
+        </Box>
+
         {grid.map((row, rIdx) => {
         const isCandidateRow = rIdx > currentRow && candidates.length > (rIdx - currentRow - 1);
         const candidateWord = isCandidateRow ? candidates[rIdx - currentRow - 1] : null;

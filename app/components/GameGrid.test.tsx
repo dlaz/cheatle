@@ -41,6 +41,28 @@ describe("GameGrid", () => {
     expect(screen.getByTestId("cell-0-1")).toHaveTextContent("L");
   });
 
+  it("supports reset, undo, and redo actions", () => {
+    render(<GameGrid />);
+
+    for (const key of ["A", "L", "E", "R", "T"]) {
+      fireEvent.keyDown(window, { key });
+    }
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(screen.getByTestId("cell-0-0")).toHaveTextContent("A");
+
+    fireEvent.click(screen.getByRole("button", { name: /undo/i }));
+    expect(screen.getByRole("button", { name: /redo/i })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /redo/i }));
+    expect(screen.getByRole("button", { name: /redo/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /reset/i }));
+    expect(screen.getByTestId("cell-0-0")).toHaveTextContent("");
+    expect(screen.getByRole("button", { name: /undo/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /redo/i })).toBeDisabled();
+  });
+
   it("filters possible words from grid constraints", () => {
     render(<GameGrid />);
 
