@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Box, FormControlLabel, Paper, Switch, Typography } from "@mui/material";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Box, Button, FormControlLabel, Paper, Switch, Typography } from "@mui/material";
 import wordsData from '../data/words.json';
 import { byFrequency } from "../utils/sorters";
 import { sortCandidates } from "../utils/wordScorer";
@@ -17,6 +17,11 @@ const GUESS_ROWS = 6;
 const SUGGESTION_ROWS = 10;
 const ROWS = GUESS_ROWS + SUGGESTION_ROWS;
 const COLS = 5;
+const KEYBOARD_ROWS = [
+  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+  ["Enter", "Z", "X", "C", "V", "B", "N", "M", "Backspace"],
+] as const;
 
 const getColorCode = (color: ColorState) => {
   switch (color) {
@@ -51,12 +56,11 @@ export default function GameGrid() {
   const [currentRow, setCurrentRow] = useState(0);
   const [currentCol, setCurrentCol] = useState(0);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture when user holds command/ctrl so they can refresh
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const handleGameKey = useCallback(
+    (rawKey: string) => {
+      const key = rawKey.length === 1 ? rawKey.toUpperCase() : rawKey;
 
-      if (e.key === "Enter") {
+      if (key === "Enter") {
         if (currentCol === COLS && currentRow < GUESS_ROWS - 1) {
           setCurrentRow((prev) => prev + 1);
           setCurrentCol(0);
@@ -64,7 +68,7 @@ export default function GameGrid() {
         return;
       }
 
-      if (e.key === "Backspace") {
+      if (key === "Backspace") {
         if (currentCol > 0) {
           setGrid((prev) => {
             const newGrid = [...prev];
@@ -77,12 +81,12 @@ export default function GameGrid() {
         return;
       }
 
-      if (/^[a-zA-Z]$/.test(e.key)) {
+      if (/^[A-Z]$/.test(key)) {
         if (currentCol < COLS && currentRow < ROWS) {
           setGrid((prev) => {
             const newGrid = [...prev];
             newGrid[currentRow] = [...newGrid[currentRow]];
-            const typedLetter = e.key.toUpperCase();
+            const typedLetter = key;
             let autoColor: ColorState = "default";
 
             // If this column is already green in prior submitted rows, auto-mark
@@ -104,11 +108,30 @@ export default function GameGrid() {
           setCurrentCol((prev) => prev + 1);
         }
       }
+    },
+    [currentCol, currentRow]
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't capture when user holds command/ctrl so they can refresh
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Let focused inputs handle their own key events to avoid double handling.
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+
+      handleGameKey(e.key);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentRow, currentCol]);
+  }, [handleGameKey]);
 
   const toggleColor = (r: number, c: number) => {
     // Only allow toggling color if there's a letter
@@ -214,12 +237,23 @@ export default function GameGrid() {
       sx={{
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        gap: 1,
-        p: 2,
+        height: "100vh",
+        gap: 0,
       }}
     >
-      {grid.map((row, rIdx) => {
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1,
+          p: 2,
+          pb: "340px",
+        }}
+      >
+        {grid.map((row, rIdx) => {
         const isCandidateRow = rIdx > currentRow && candidates.length > (rIdx - currentRow - 1);
         const candidateWord = isCandidateRow ? candidates[rIdx - currentRow - 1] : null;
 
@@ -335,8 +369,64 @@ export default function GameGrid() {
           </Box>
         )}
       </Box>
+      </Box>
 
-
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          width: "100%",
+          bgcolor: "background.paper",
+          boxShadow: "0 -2px 8px rgba(0,0,0,0.1)",
+          zIndex: 10,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1,
+          p: 2,
+        }}
+      >
+        <Box sx={{ width: "100%", maxWidth: 560, userSelect: "none" }}>
+          {KEYBOARD_ROWS.map((row, rowIndex) => (
+            <Box
+              key={`kb-row-${rowIndex}`}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                gap: 0.5,
+                mb: 0.5,
+              }}
+            >
+              {row.map((key) => {
+                const isWide = key === "Enter" || key === "Backspace";
+                return (
+                  <Button
+                    key={key}
+                    variant="contained"
+                    onClick={() => {
+                      handleGameKey(key);
+                    }}
+                    sx={{
+                      minWidth: isWide ? 62 : 34,
+                      px: isWide ? 1 : 0,
+                      height: 44,
+                      fontSize: isWide ? "0.72rem" : "0.9rem",
+                      fontWeight: 700,
+                      textTransform: "none",
+                      bgcolor: "#818384",
+                      color: "#fff",
+                      '&:hover': { bgcolor: "#6f7172" },
+                    }}
+                    aria-label={key === "Backspace" ? "Backspace" : key}
+                  >
+                    {key === "Backspace" ? "⌫" : key}
+                  </Button>
+                );
+              })}
+            </Box>
+          ))}
+        </Box>
+      </Box>
     </Box>
   );
 }

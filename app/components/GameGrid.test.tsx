@@ -31,6 +31,16 @@ describe("GameGrid", () => {
     expect(debugText).toBeInTheDocument();
   });
 
+  it("supports entering letters from the on-screen keyboard", () => {
+    render(<GameGrid />);
+
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+    fireEvent.click(screen.getByRole("button", { name: "L" }));
+
+    expect(screen.getByTestId("cell-0-0")).toHaveTextContent("A");
+    expect(screen.getByTestId("cell-0-1")).toHaveTextContent("L");
+  });
+
   it("filters possible words from grid constraints", () => {
     render(<GameGrid />);
 
