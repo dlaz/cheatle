@@ -211,14 +211,7 @@ export default function GameGrid() {
     });
   };
 
-  // Capture only the submitted rows (r < currentRow). Every setGrid call spreads
-  // the mutated row into a new array (newGrid[r] = [...newGrid[r]]), so row identity
-  // is a reliable change indicator. Typing only mutates grid[currentRow], leaving
-  // grid[r < currentRow] with stable references — this memo won't rerun on each
-  // keypress; it reruns only when a row is submitted (currentRow changes) or a
-  // submitted cell's color is toggled (its row gets a new array reference).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const submittedRows = useMemo(() => grid.slice(0, currentRow), [currentRow, ...grid.slice(0, currentRow)]);
+  const submittedRows = useMemo(() => grid.slice(0, currentRow), [grid, currentRow]);
 
   const { candidates, greens, possibleSolutions } = useMemo(() => {
     const greens: (string | null)[] = [null, null, null, null, null];
@@ -273,6 +266,9 @@ export default function GameGrid() {
 
       // Check greys
       for (const g of greys) {
+        // A gray tile always means this exact position cannot contain the letter.
+        if (w[g.pos] === g.char) return false;
+
         const isAlsoGreenOrYellow = greens.includes(g.char) || yellows.some(y => y.char === g.char);
 
         if (!isAlsoGreenOrYellow) {

@@ -5,6 +5,7 @@ import GameGrid from "./GameGrid";
 jest.mock("../data/words.json", () => [
   "alert",
   "arose",
+  "eebcd",
   "befit",
   "belly",
   "bland",
@@ -113,9 +114,11 @@ describe("GameGrid", () => {
     fireEvent.keyDown(window, { key: "Enter" });
 
     fireEvent.click(screen.getByRole("switch", { name: /debug: show all possible solutions/i }));
-    // If the cell had started default, one click would make it yellow and conflict
-    // with the locked green, producing no candidates. We expect CLAMP to survive.
-    expect(screen.getByText(/clamp/i)).toBeInTheDocument();
+    // One click from auto-green returns to default/gray, which conflicts with the
+    // previously locked green at this position, so no solutions should remain.
+    expect(
+      screen.getByText(/No possible solutions with current constraints\./i)
+    ).toBeInTheDocument();
   });
 
   it("handles befit scenario with arose, lined, ethic, petit guesses", () => {
@@ -199,7 +202,7 @@ describe("GameGrid", () => {
     expect(screen.getByText(/befit/)).toBeInTheDocument();
   });
 
-  it("befit survives when PETIT is submitted without marking any colors", () => {
+  it("default cells in a submitted row still constrain candidates", () => {
     render(<GameGrid />);
     const enter = () => fireEvent.keyDown(window, { key: "Enter" });
 
@@ -218,12 +221,32 @@ describe("GameGrid", () => {
     fireEvent.click(screen.getByTestId("cell-2-3")); fireEvent.click(screen.getByTestId("cell-2-3")); // I → green
     enter();
 
-    // Submit PETIT with NO colors marked (all default — contributes no constraints)
+    // Submit PETIT with NO colors marked (all default -> gray constraints).
     for (const key of ["P", "E", "T", "I", "T"]) fireEvent.keyDown(window, { key });
     enter();
 
     fireEvent.click(screen.getByRole("switch", { name: /debug: show all possible solutions/i }));
-    // befit must still survive — default cells impose no constraints
-    expect(screen.getByText(/befit/)).toBeInTheDocument();
+    expect(screen.queryByText(/befit/i)).not.toBeInTheDocument();
+  });
+
+  it("rejects letters in gray positions even when same letter is green/yellow elsewhere", () => {
+    render(<GameGrid />);
+
+    for (const key of ["E", "E", "E", "E", "E"]) {
+      fireEvent.keyDown(window, { key });
+    }
+
+    // Position 0 is green.
+    fireEvent.click(screen.getByTestId("cell-0-0"));
+    fireEvent.click(screen.getByTestId("cell-0-0"));
+
+    // Position 4 is yellow; positions 1-3 stay gray/default.
+    fireEvent.click(screen.getByTestId("cell-0-4"));
+
+    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.click(screen.getByRole("switch", { name: /debug: show all possible solutions/i }));
+
+    // eebcd has E at gray position 1 and must be excluded.
+    expect(screen.queryByText(/eebcd/i)).not.toBeInTheDocument();
   });
 });
