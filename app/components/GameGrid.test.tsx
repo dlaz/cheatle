@@ -56,6 +56,29 @@ describe("GameGrid", () => {
     expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
   });
 
+  it("shows the keyboard by default on mobile", () => {
+    const originalMatchMedia = window.matchMedia;
+
+    (window as any).matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(), // deprecated
+      removeListener: jest.fn(), // deprecated
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+
+    try {
+      render(<GameGrid />);
+
+      // On mobile, the on-screen keyboard should be visible by default.
+      expect(screen.getByRole("button", { name: "A" })).toBeInTheDocument();
+    } finally {
+      (window as any).matchMedia = originalMatchMedia;
+    }
+  });
   it("supports reset, undo, and redo actions", () => {
     render(<GameGrid />);
 
