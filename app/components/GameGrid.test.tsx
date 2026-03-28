@@ -35,6 +35,8 @@ describe("GameGrid", () => {
   it("supports entering letters from the on-screen keyboard", () => {
     render(<GameGrid />);
 
+    fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+
     fireEvent.click(screen.getByRole("button", { name: "A" }));
     fireEvent.click(screen.getByRole("button", { name: "L" }));
 
@@ -42,6 +44,41 @@ describe("GameGrid", () => {
     expect(screen.getByTestId("cell-0-1")).toHaveTextContent("L");
   });
 
+  it("keeps the keyboard hidden by default and lets users toggle it", () => {
+    render(<GameGrid />);
+
+    expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+    expect(screen.getByRole("button", { name: "A" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide keyboard/i }));
+    expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
+  });
+
+  it("shows the keyboard by default on mobile", () => {
+    const originalMatchMedia = window.matchMedia;
+
+    (window as any).matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(), // deprecated
+      removeListener: jest.fn(), // deprecated
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+
+    try {
+      render(<GameGrid />);
+
+      // On mobile, the on-screen keyboard should be visible by default.
+      expect(screen.getByRole("button", { name: "A" })).toBeInTheDocument();
+    } finally {
+      (window as any).matchMedia = originalMatchMedia;
+    }
+  });
   it("supports reset, undo, and redo actions", () => {
     render(<GameGrid />);
 

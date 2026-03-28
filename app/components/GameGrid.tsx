@@ -1,11 +1,23 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Box, Button, FormControlLabel, Paper, Switch, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  FormControlLabel,
+  Paper,
+  Switch,
+  Typography,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import UndoIcon from "@mui/icons-material/Undo";
 import RedoIcon from "@mui/icons-material/Redo";
+import KeyboardIcon from "@mui/icons-material/Keyboard";
+import KeyboardHideIcon from "@mui/icons-material/KeyboardHide";
 import wordsData from '../data/words.json';
+import OnScreenKeyboard from "./OnScreenKeyboard";
 import { byFrequency } from "../utils/sorters";
 import { sortCandidates } from "../utils/wordScorer";
 
@@ -26,11 +38,6 @@ const GUESS_ROWS = 6;
 const SUGGESTION_ROWS = 10;
 const ROWS = GUESS_ROWS + SUGGESTION_ROWS;
 const COLS = 5;
-const KEYBOARD_ROWS = [
-  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-  ["Enter", "Z", "X", "C", "V", "B", "N", "M", "Backspace"],
-] as const;
 
 const createEmptyGrid = () =>
   Array.from({ length: ROWS }, () =>
@@ -64,12 +71,24 @@ const getBorderColor = (color: ColorState, letter: string) => {
 };
 
 export default function GameGrid() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
   const [showPossibleWords, setShowPossibleWords] = useState(false);
+  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [hasInitializedKeyboard, setHasInitializedKeyboard] = useState(false);
   const [grid, setGrid] = useState<CellData[][]>(createEmptyGrid);
   const [currentRow, setCurrentRow] = useState(0);
   const [currentCol, setCurrentCol] = useState(0);
   const [pastSnapshots, setPastSnapshots] = useState<GameSnapshot[]>([]);
   const [futureSnapshots, setFutureSnapshots] = useState<GameSnapshot[]>([]);
+
+  useEffect(() => {
+    if (hasInitializedKeyboard) return;
+
+    // Default to showing the on-screen keyboard on mobile only.
+    setShowKeyboard(isMobile);
+    setHasInitializedKeyboard(true);
+  }, [hasInitializedKeyboard, isMobile]);
 
   const getSnapshot = useCallback(
     (): GameSnapshot => ({
@@ -316,7 +335,7 @@ export default function GameGrid() {
           alignItems: "center",
           gap: 1,
           p: 2,
-          pb: "340px",
+          pb: 2,
         }}
       >
         <Box
@@ -348,6 +367,15 @@ export default function GameGrid() {
             disabled={futureSnapshots.length === 0}
           >
             Redo
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => setShowKeyboard((prev) => !prev)}
+            aria-pressed={showKeyboard}
+            aria-label={showKeyboard ? "Hide keyboard" : "Show keyboard"}
+            sx={{ minWidth: 0, px: 1 }}
+          >
+            {showKeyboard ? <KeyboardHideIcon /> : <KeyboardIcon />}
           </Button>
         </Box>
 
@@ -469,62 +497,7 @@ export default function GameGrid() {
       </Box>
       </Box>
 
-      <Box
-        sx={{
-          position: "sticky",
-          bottom: 0,
-          width: "100%",
-          bgcolor: "background.paper",
-          boxShadow: "0 -2px 8px rgba(0,0,0,0.1)",
-          zIndex: 10,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 1,
-          p: 2,
-        }}
-      >
-        <Box sx={{ width: "100%", maxWidth: 560, userSelect: "none" }}>
-          {KEYBOARD_ROWS.map((row, rowIndex) => (
-            <Box
-              key={`kb-row-${rowIndex}`}
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                gap: 0.5,
-                mb: 0.5,
-              }}
-            >
-              {row.map((key) => {
-                const isWide = key === "Enter" || key === "Backspace";
-                return (
-                  <Button
-                    key={key}
-                    variant="contained"
-                    onClick={() => {
-                      handleGameKey(key);
-                    }}
-                    sx={{
-                      minWidth: isWide ? 62 : 34,
-                      px: isWide ? 1 : 0,
-                      height: 44,
-                      fontSize: isWide ? "0.72rem" : "0.9rem",
-                      fontWeight: 700,
-                      textTransform: "none",
-                      bgcolor: "#818384",
-                      color: "#fff",
-                      '&:hover': { bgcolor: "#6f7172" },
-                    }}
-                    aria-label={key === "Backspace" ? "Backspace" : key}
-                  >
-                    {key === "Backspace" ? "⌫" : key}
-                  </Button>
-                );
-              })}
-            </Box>
-          ))}
-        </Box>
-      </Box>
+      {showKeyboard && <OnScreenKeyboard onKeyPress={handleGameKey} />}
     </Box>
   );
 }
