@@ -35,11 +35,25 @@ describe("GameGrid", () => {
   it("supports entering letters from the on-screen keyboard", () => {
     render(<GameGrid />);
 
+    fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+
     fireEvent.click(screen.getByRole("button", { name: "A" }));
     fireEvent.click(screen.getByRole("button", { name: "L" }));
 
     expect(screen.getByTestId("cell-0-0")).toHaveTextContent("A");
     expect(screen.getByTestId("cell-0-1")).toHaveTextContent("L");
+  });
+
+  it("keeps the keyboard hidden by default and lets users toggle it", () => {
+    render(<GameGrid />);
+
+    expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+    expect(screen.getByRole("button", { name: "A" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide keyboard/i }));
+    expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
   });
 
   it("supports reset, undo, and redo actions", () => {
