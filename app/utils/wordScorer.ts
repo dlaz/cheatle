@@ -1,52 +1,81 @@
 
 /**
- * Scores words by sum of per-position letter frequencies in the candidate list.
+ * Returns the Wordle-style result pattern for a guess against a solution.
+ *
+ * Pattern chars:
+ * - g = green
+ * - y = yellow
+ * - x = gray
  */
-export class WordScorer {
-  private _rankedWords: Map<string, number>;
+export function getFeedbackPattern(guess: string, solution: string): string {
+  const len = guess.length;
+  const pattern = Array<string>(len).fill("x");
+  const remaining = new Map<string, number>();
 
-  constructor(wordList: string[]) {
-    const size = wordList.length > 0 ? wordList[0].length : 0;
-
-    // Count letter frequency at each position
-    const posFreq: Map<string, number>[] = Array.from({ length: size }, () => new Map());
-    for (const w of wordList) {
-      for (let i = 0; i < w.length; i++) {
-        const ch = w[i];
-        posFreq[i].set(ch, (posFreq[i].get(ch) ?? 0) + 1);
-      }
+  // First pass: greens and remaining solution letters.
+  for (let i = 0; i < len; i++) {
+    if (guess[i] === solution[i]) {
+      pattern[i] = "g";
+      continue;
     }
 
-    // Score each word = sum of positional frequencies
-    const scored: [string, number][] = wordList.map((w) => {
-      let s = 0;
-      for (let i = 0; i < w.length; i++) {
-        s += posFreq[i].get(w[i]) ?? 0;
-      }
-      return [w, s];
-    });
+    const ch = solution[i];
+    remaining.set(ch, (remaining.get(ch) ?? 0) + 1);
+  }
 
-    // Sort ascending by score, then assign rank (index)
-    scored.sort((a, b) => a[1] - b[1]);
+  // Second pass: yellows where any unmatched copy remains.
+  for (let i = 0; i < len; i++) {
+    if (pattern[i] === "g") continue;
 
-    this._rankedWords = new Map<string, number>();
-    for (let i = 0; i < scored.length; i++) {
-      this._rankedWords.set(scored[i][0], i);
+    const ch = guess[i];
+    const count = remaining.get(ch) ?? 0;
+    if (count > 0) {
+      pattern[i] = "y";
+      remaining.set(ch, count - 1);
     }
   }
 
-  /** Higher rank = more common positional letters. */
-  score(word: string): number {
-    return this._rankedWords.get(word) ?? 0;
-  }
+  return pattern.join("");
 }
 
 /**
- * Given a filtered candidate list, build a scorer and return candidates
- * sorted best-first (highest score first).
+ * Computes expected remaining valid solutions after making a guess,
+ * assuming each current solution is equally likely.
+ */
+export function expectedRemainingAfterGuess(guess: string, solutions: string[]): number {
+  if (solutions.length === 0) return 0;
+
+  const buckets = new Map<string, number>();
+  for (const solution of solutions) {
+    const key = getFeedbackPattern(guess, solution);
+    buckets.set(key, (buckets.get(key) ?? 0) + 1);
+  }
+
+  const total = solutions.length;
+  let expected = 0;
+  for (const count of buckets.values()) {
+    expected += (count * count) / total;
+  }
+  return expected;
+}
+
+/**
+ * Sort candidates by expected remaining solutions (lower is better).
  */
 export function sortCandidates(candidates: string[]): string[] {
-  if (candidates.length === 0) return [];
-  const scorer = new WordScorer(candidates);
-  return [...candidates].sort((a, b) => scorer.score(b) - scorer.score(a));
+  if (candidates.length < 2) return candidates;
+
+  const scored = candidates.map((guess) => ({
+    guess,
+    expectedRemaining: expectedRemainingAfterGuess(guess, candidates),
+  }));
+
+  scored.sort((a, b) => {
+    if (a.expectedRemaining !== b.expectedRemaining) {
+      return a.expectedRemaining - b.expectedRemaining;
+    }
+    return a.guess.localeCompare(b.guess);
+  });
+
+  return scored.map((entry) => entry.guess);
 }

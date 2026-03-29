@@ -18,7 +18,6 @@ import KeyboardIcon from "@mui/icons-material/Keyboard";
 import KeyboardHideIcon from "@mui/icons-material/KeyboardHide";
 import wordsData from '../data/words.json';
 import OnScreenKeyboard from "./OnScreenKeyboard";
-import { byFrequency } from "../utils/sorters";
 import { sortCandidates } from "../utils/wordScorer";
 
 type ColorState = "default" | "grey" | "yellow" | "green";
@@ -307,8 +306,8 @@ export default function GameGrid() {
       return true;
     });
 
-    // Rank suggestions using shared heuristics first, then positional scoring.
-    const candidates = sortCandidates(byFrequency(filtered));
+    // Rank suggestions by expected remaining valid words after each guess.
+    const candidates = sortCandidates(filtered);
     const possibleSolutions = [...filtered].sort();
 
     return { candidates, greens, possibleSolutions };

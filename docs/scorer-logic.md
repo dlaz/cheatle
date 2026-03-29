@@ -1,14 +1,28 @@
 # Scorer Logic
 
-This document describes the word-scoring and game-state logic implemented in `scorer.py`.
+This document describes the current suggestion scoring used by the app.
 
-## WordScorer
+## Elimination-First Ranking
 
-`WordScorer` ranks every word in a given word list by how "common" its letters are **at each position**.
+Suggestions are ranked by how strongly they shrink the remaining solution set.
 
-1. **Letter-position frequency**: For each position in the word (0 through *n*), count how many times each letter appears at that position across the entire word list.
-2. **Word score**: A word's raw score is the sum of positional frequencies for each of its letters — i.e., for a word like `crane`, the score is `freq[0]['c'] + freq[1]['r'] + freq[2]['a'] + freq[3]['n'] + freq[4]['e']`.
-3. **Ranking**: All candidate words are sorted by this score in ascending order and assigned a rank (index). Higher rank → more positionally common letters.
+For each candidate guess:
 
-The scorer intentionally uses **positional** frequency rather than global letter frequency (the global-frequency approach is commented out in the code). This biases suggestions toward words whose letters appear frequently *in the right spots*, not just frequently overall.
+1. Simulate the Wordle feedback pattern (`g`, `y`, `x`) against every currently valid solution.
+2. Group solutions by the resulting feedback pattern.
+3. Compute expected remaining candidates as:
+
+$$
+E[\text{remaining}] = \sum_{b \in \text{patterns}} \frac{|b|^2}{N}
+$$
+
+Where:
+- $N$ is the number of current valid solutions.
+- $|b|$ is the size of a pattern bucket.
+
+Lower expected value is better, because it means that after seeing feedback from that guess, the next candidate set is likely to be smaller.
+
+## Tie-Breaking
+
+- Ties are resolved alphabetically for deterministic output.
 
