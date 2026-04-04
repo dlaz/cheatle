@@ -9,15 +9,35 @@
 import nltk
 import click
 import json
+import sys
 
-@click.argument('corpus_name', default='reuters')
-@click.argument('word_list_file', type=click.File('r'))
-@click.option('--output-file', '-o', type=click.File('w'), default='-')
+
+@click.argument(
+    "corpus_name",
+    default="reuters",
+    required=False,
+)
+@click.argument(
+    "word_list_file",
+    type=click.File("r"),
+)
+@click.option(
+    "--output-file",
+    "-o",
+    type=click.File("w"),
+    default="-",
+    help="Output file (default: stdout)",
+)
 @click.group(invoke_without_command=True)
 def score_word_list(word_list_file, corpus_name, output_file):
     word_list = json.load(word_list_file)
     nltk.download(corpus_name)
-    corpus = getattr(nltk.corpus, corpus_name)
+
+    try:
+        corpus = getattr(nltk.corpus, corpus_name)
+    except AttributeError:
+        click.echo(f"Corpus '{corpus_name}' not found.")
+        sys.exit(1)
 
     freqs = nltk.FreqDist(corpus.words())
 
@@ -33,5 +53,6 @@ def score_word_list(word_list_file, corpus_name, output_file):
 
     json.dump(word_freqs, output_file, indent=2)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     score_word_list()
