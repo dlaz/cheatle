@@ -1,0 +1,4 @@
+{
+    "image": "://microsoft.com",
+    "onCreateCommand": "pip install uv"
+}

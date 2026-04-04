@@ -17,8 +17,9 @@ import RedoIcon from "@mui/icons-material/Redo";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
 import KeyboardHideIcon from "@mui/icons-material/KeyboardHide";
 import wordsData from '../data/words.json';
+import scoredWordsData from '../data/scored_words.json';
+import wordByFrequencyData from '../data/word_by_frequency.json';
 import OnScreenKeyboard from "./OnScreenKeyboard";
-import { byFrequency } from "../utils/sorters";
 import { sortCandidates } from "../utils/wordScorer";
 
 type ColorState = "default" | "grey" | "yellow" | "green";
@@ -307,8 +308,13 @@ export default function GameGrid() {
       return true;
     });
 
-    // Rank suggestions using shared heuristics first, then positional scoring.
-    const candidates = sortCandidates(byFrequency(filtered));
+    // Rank with one-move lookahead. For the initial full-state list,
+    // use precomputed scores to keep the first render responsive.
+    const precomputedScores = submittedRows.length === 0
+      ? (scoredWordsData as Record<string, number>)
+      : undefined;
+    const frequencyScores = wordByFrequencyData as Record<string, number>;
+    const candidates = sortCandidates(filtered, precomputedScores, frequencyScores);
     const possibleSolutions = [...filtered].sort();
 
     return { candidates, greens, possibleSolutions };
