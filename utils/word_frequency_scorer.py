@@ -48,8 +48,11 @@ def score_word_list(word_list_file, corpus_name, output_file):
         total += freq
         word_freqs[word] = freq
 
-    for word in word_list:
-        word_freqs[word] /= total
+    if not total:
+        word_freqs = freqs
+    else:
+        for word in word_list:
+            word_freqs[word] /= total
 
     json.dump(word_freqs, output_file, indent=2)
 
