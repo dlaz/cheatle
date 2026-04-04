@@ -17,6 +17,7 @@ import RedoIcon from "@mui/icons-material/Redo";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
 import KeyboardHideIcon from "@mui/icons-material/KeyboardHide";
 import wordsData from '../data/words.json';
+import scoredWordsData from '../data/scored_words.json';
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { sortCandidates } from "../utils/wordScorer";
 
@@ -306,8 +307,12 @@ export default function GameGrid() {
       return true;
     });
 
-    // Rank suggestions by expected remaining valid words after each guess.
-    const candidates = sortCandidates(filtered);
+    // Rank with one-move lookahead. For the initial full-state list,
+    // use precomputed scores to keep the first render responsive.
+    const precomputedScores = submittedRows.length === 0
+      ? (scoredWordsData as Record<string, number>)
+      : undefined;
+    const candidates = sortCandidates(filtered, precomputedScores);
     const possibleSolutions = [...filtered].sort();
 
     return { candidates, greens, possibleSolutions };
