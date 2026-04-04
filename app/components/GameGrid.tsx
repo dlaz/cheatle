@@ -18,6 +18,7 @@ import KeyboardIcon from "@mui/icons-material/Keyboard";
 import KeyboardHideIcon from "@mui/icons-material/KeyboardHide";
 import wordsData from '../data/words.json';
 import scoredWordsData from '../data/scored_words.json';
+import wordByFrequencyData from '../data/word_by_frequency.json';
 import OnScreenKeyboard from "./OnScreenKeyboard";
 import { sortCandidates } from "../utils/wordScorer";
 
@@ -312,7 +313,8 @@ export default function GameGrid() {
     const precomputedScores = submittedRows.length === 0
       ? (scoredWordsData as Record<string, number>)
       : undefined;
-    const candidates = sortCandidates(filtered, precomputedScores);
+    const frequencyScores = wordByFrequencyData as Record<string, number>;
+    const candidates = sortCandidates(filtered, precomputedScores, frequencyScores);
     const possibleSolutions = [...filtered].sort();
 
     return { candidates, greens, possibleSolutions };

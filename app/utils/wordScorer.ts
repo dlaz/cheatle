@@ -110,37 +110,95 @@ export function expectedRemainingAfterGuess(guess: string, solutions: string[]):
  */
 export function sortCandidates(
   candidates: string[],
-  precomputedFullStateScores?: Record<string, number>
+  precomputedFullStateScores?: Record<string, number>,
+  frequencyScores?: Record<string, number>
 ): string[] {
   if (candidates.length < 2) return candidates;
+
+  // Shift strategy by search space size:
+  // - many candidates: prioritize elimination (min expected remaining)
+  // - few candidates: prioritize likely/common solutions (frequency)
+  const MANY_CANDIDATES_THRESHOLD = 80;
+  const FEW_CANDIDATES_THRESHOLD = 20;
+
+  const getMinimizationWeight = (candidateCount: number): number => {
+    if (candidateCount >= MANY_CANDIDATES_THRESHOLD) return 0.9;
+    if (candidateCount <= FEW_CANDIDATES_THRESHOLD) return 0.35;
+
+    const progress =
+      (candidateCount - FEW_CANDIDATES_THRESHOLD) /
+      (MANY_CANDIDATES_THRESHOLD - FEW_CANDIDATES_THRESHOLD);
+    return 0.35 + progress * (0.9 - 0.35);
+  };
+
+  const getFrequency = (word: string) => frequencyScores?.[word.toLowerCase()] ?? 0;
+
+  const scoreCandidates = (
+    entries: Array<{ guess: string; expectedRemaining: number; frequency: number }>
+  ) => {
+    const minimizationWeight = getMinimizationWeight(candidates.length);
+
+    const finiteExpected = entries
+      .map((entry) => entry.expectedRemaining)
+      .filter((value) => Number.isFinite(value));
+
+    const minExpected = finiteExpected.length > 0 ? Math.min(...finiteExpected) : 0;
+    const maxExpected = finiteExpected.length > 0 ? Math.max(...finiteExpected) : 1;
+    const expectedRange = maxExpected - minExpected;
+
+    const frequencies = entries.map((entry) => entry.frequency);
+    const minFrequency = Math.min(...frequencies);
+    const maxFrequency = Math.max(...frequencies);
+    const frequencyRange = maxFrequency - minFrequency;
+
+    const withCombinedScore = entries.map((entry) => {
+      const normalizedExpected = Number.isFinite(entry.expectedRemaining)
+        ? expectedRange > 0
+          ? (entry.expectedRemaining - minExpected) / expectedRange
+          : 0
+        : 1;
+
+      const normalizedFrequency = frequencyRange > 0
+        ? (entry.frequency - minFrequency) / frequencyRange
+        : 0;
+
+      const combinedScore =
+        minimizationWeight * normalizedExpected +
+        (1 - minimizationWeight) * (1 - normalizedFrequency);
+
+      return {
+        ...entry,
+        combinedScore,
+      };
+    });
+
+    withCombinedScore.sort((a, b) => {
+      if (a.combinedScore !== b.combinedScore) {
+        return a.combinedScore - b.combinedScore;
+      }
+      if (a.expectedRemaining !== b.expectedRemaining) {
+        return a.expectedRemaining - b.expectedRemaining;
+      }
+      if (a.frequency !== b.frequency) return b.frequency - a.frequency;
+      return a.guess.localeCompare(b.guess);
+    });
+
+    return withCombinedScore.map((entry) => entry.guess);
+  };
 
   if (precomputedFullStateScores) {
     const scored = candidates.map((guess) => ({
       guess,
       expectedRemaining: precomputedFullStateScores[guess.toLowerCase()] ?? Number.POSITIVE_INFINITY,
+      frequency: getFrequency(guess),
     }));
-
-    scored.sort((a, b) => {
-      if (a.expectedRemaining !== b.expectedRemaining) {
-        return a.expectedRemaining - b.expectedRemaining;
-      }
-      return a.guess.localeCompare(b.guess);
-    });
-
-    return scored.map((entry) => entry.guess);
+    return scoreCandidates(scored);
   }
 
   const scored = candidates.map((guess) => ({
     guess,
     expectedRemaining: expectedRemainingAfterGuess(guess, candidates),
+    frequency: getFrequency(guess),
   }));
-
-  scored.sort((a, b) => {
-    if (a.expectedRemaining !== b.expectedRemaining) {
-      return a.expectedRemaining - b.expectedRemaining;
-    }
-    return a.guess.localeCompare(b.guess);
-  });
-
-  return scored.map((entry) => entry.guess);
+  return scoreCandidates(scored);
 }
