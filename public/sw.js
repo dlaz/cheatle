@@ -1,6 +1,6 @@
 const CACHE_NAME = "cheatle-v1";
 
-const STATIC_ASSETS = ["/", "/icon-192x192.png", "/icon-512x512.png"];
+const STATIC_ASSETS = ["/icon-192x192.png", "/icon-512x512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
