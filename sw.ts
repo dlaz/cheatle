@@ -2,14 +2,16 @@ const CACHE_NAME = "cheatle-v1";
 
 const STATIC_ASSETS = ["/icon-192x192.png", "/icon-512x512.png"];
 
-self.addEventListener("install", (event) => {
+const sw = self as unknown as ServiceWorkerGlobalScope;
+
+sw.addEventListener("install", (event: ExtendableEvent) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
-  self.skipWaiting();
+  sw.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
+sw.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(
     caches
       .keys()
@@ -21,10 +23,10 @@ self.addEventListener("activate", (event) => {
         )
       )
   );
-  self.clients.claim();
+  sw.clients.claim();
 });
 
-self.addEventListener("fetch", (event) => {
+sw.addEventListener("fetch", (event: FetchEvent) => {
   if (event.request.method !== "GET") return;
 
   event.respondWith(
@@ -38,7 +40,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached);
+        .catch(() => cached as Response);
 
       return cached || fetchPromise;
     })
