@@ -40,7 +40,7 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
           }
           return response;
         })
-        .catch(() => cached as Response);
+        .catch(() => cached || new Response("Offline", { status: 503 }));
 
       return cached || fetchPromise;
     })
