@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
+import { basePath } from "../lib/config";
 
 export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
   return {
     name: "Cheatle",
     short_name: "Cheatle",
