@@ -1,8 +1,12 @@
 const CACHE_NAME = "cheatle-v1";
 
-const STATIC_ASSETS = ["/icon-192x192.png", "/icon-512x512.png"];
-
 const sw = self as unknown as ServiceWorkerGlobalScope;
+
+const SW_DIR = sw.location.href.replace(/\/[^/]+$/, "/");
+const STATIC_ASSETS = [
+  `${SW_DIR}icon-192x192.png`,
+  `${SW_DIR}icon-512x512.png`,
+];
 
 sw.addEventListener("install", (event: ExtendableEvent) => {
   event.waitUntil(

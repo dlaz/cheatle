@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { basePath } from "../lib/config";
 
 export const dynamic = "force-static";
 
@@ -7,19 +8,19 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Cheatle",
     short_name: "Cheatle",
     description: "Helps you cheat at Wordle...just a little bit.",
-    start_url: "/cheatle",
+    start_url: basePath || "/",
     display: "standalone",
     background_color: "#121213",
     theme_color: "#121213",
     icons: [
       {
-        src: "/icon-192x192.png",
+        src: `${basePath}/icon-192x192.png`,
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icon-512x512.png",
+        src: `${basePath}/icon-512x512.png`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any",

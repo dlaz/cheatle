@@ -1,10 +1,9 @@
 import type { NextConfig } from "next";
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, "");
+import { basePath } from "./lib/config";
 
 const nextConfig: NextConfig = {
   output: "export",
-  basePath: basePath && basePath !== "/" ? basePath : undefined,
+  basePath: basePath || undefined,
   images: {
     unoptimized: true,
   },
