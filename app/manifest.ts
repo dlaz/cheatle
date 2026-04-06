@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Cheatle",
     short_name: "Cheatle",
     description: "Helps you cheat at Wordle...just a little bit.",
-    start_url: "/",
+    start_url: "/cheatle",
     display: "standalone",
     background_color: "#121213",
     theme_color: "#121213",
