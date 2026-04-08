@@ -100,6 +100,10 @@ export function expectedRemainingAfterGuess(guess: string, solutions: string[]):
   return squaredSum / total;
 }
 
+// Threshold constants exported for use in simulation and tests.
+export const MANY_CANDIDATES_THRESHOLD = 200;
+export const FEW_CANDIDATES_THRESHOLD = 8;
+
 /**
  * Sort candidates by one-move lookahead: expected remaining solutions
  * after the guess (lower is better).
@@ -107,27 +111,29 @@ export function expectedRemainingAfterGuess(guess: string, solutions: string[]):
  * If precomputedFullStateScores is provided, those scores are used directly.
  * This keeps the initial all-words state fast while preserving exact lookahead
  * for subsequent narrowed states.
+ *
+ * manyCandidatesThreshold and fewCandidatesThreshold override the module-level
+ * defaults and are intended for use in simulations/tuning only.
  */
 export function sortCandidates(
   candidates: string[],
   precomputedFullStateScores?: Record<string, number>,
-  frequencyScores?: Record<string, number>
+  frequencyScores?: Record<string, number>,
+  manyCandidatesThreshold: number = MANY_CANDIDATES_THRESHOLD,
+  fewCandidatesThreshold: number = FEW_CANDIDATES_THRESHOLD
 ): string[] {
   if (candidates.length < 2) return candidates;
 
   // Shift strategy by search space size:
   // - many candidates: prioritize elimination (min expected remaining)
   // - few candidates: prioritize likely/common solutions (frequency)
-  const MANY_CANDIDATES_THRESHOLD = 80;
-  const FEW_CANDIDATES_THRESHOLD = 20;
-
   const getMinimizationWeight = (candidateCount: number): number => {
-    if (candidateCount >= MANY_CANDIDATES_THRESHOLD) return 0.9;
-    if (candidateCount <= FEW_CANDIDATES_THRESHOLD) return 0.35;
+    if (candidateCount >= manyCandidatesThreshold) return 0.9;
+    if (candidateCount <= fewCandidatesThreshold) return 0.35;
 
     const progress =
-      (candidateCount - FEW_CANDIDATES_THRESHOLD) /
-      (MANY_CANDIDATES_THRESHOLD - FEW_CANDIDATES_THRESHOLD);
+      (candidateCount - fewCandidatesThreshold) /
+      (manyCandidatesThreshold - fewCandidatesThreshold);
     return 0.35 + progress * (0.9 - 0.35);
   };
 

@@ -33,16 +33,21 @@ Higher is better.
 
 ## 3) Adaptive Weighting By Search Space Size
 
-The implementation uses these thresholds:
+The implementation uses these thresholds, determined by simulation (see `scripts/simulate_games.mjs`):
 
-- `candidateCount >= 80`: minimization weight = `0.9`
-- `candidateCount <= 20`: minimization weight = `0.35`
-- between `20` and `80`: linear interpolation between `0.35` and `0.9`
+- `candidateCount >= 200`: minimization weight = `0.9`
+- `candidateCount <= 8`: minimization weight = `0.35`
+- between `8` and `200`: linear interpolation between `0.35` and `0.9`
 
 This means:
 
 - early game (many candidates): prioritize elimination power
 - late game (few candidates): prioritize likely/common solutions
+
+The threshold values were chosen by simulating all 1 298 words with nonzero frequency
+as Wordle solutions, always picking the top suggestion at each step, and selecting the
+`(MANY, FEW)` pair that minimises the average number of guesses (3.51 vs 3.52 for the
+previous defaults of 80 / 20).
 
 ## 4) Combined Score
 
