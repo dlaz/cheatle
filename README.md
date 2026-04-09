@@ -42,7 +42,19 @@ uv run utils/word_frequency_scorer.py app/data/words.json > app/data/word_by_fre
 Run with a specific corpus (example: `brown`):
 
 ```bash
-uv run utils/word_frequency_scorer.py brown app/data/words.json > app/data/word_by_frequency.json
+uv run utils/word_frequency_scorer.py -c brown app/data/words.json > app/data/word_by_frequency.json
+```
+
+Run with multiple corpora by repeating `-c`:
+
+```bash
+uv run utils/word_frequency_scorer.py -c brown -c reuters app/data/words.json > app/data/word_by_frequency.json
+```
+
+Alternatively, write directly to an output file with `-o`:
+
+```bash
+uv run utils/word_frequency_scorer.py -c brown -c reuters -o app/data/word_by_frequency.json app/data/words.json
 ```
 
 The output JSON contains normalized frequencies in the range `[0, 1]` for each word in the game dictionary.
