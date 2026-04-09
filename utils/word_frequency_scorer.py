@@ -6,6 +6,8 @@
 # ]
 # ///
 
+import itertools
+
 import nltk
 import click
 import json
@@ -13,13 +15,16 @@ import sys
 
 
 @click.argument(
-    "corpus_name",
-    default="reuters",
-    required=False,
-)
-@click.argument(
     "word_list_file",
     type=click.File("r"),
+)
+@click.option(
+    "--corpus",
+    "-c",
+    default=["reuters"],
+    required=False,
+    multiple=True,
+    help="Corpus name (default: reuters). Can specify multiple times for multiple corpora.",
 )
 @click.option(
     "--output-file",
@@ -29,17 +34,14 @@ import sys
     help="Output file (default: stdout)",
 )
 @click.group(invoke_without_command=True)
-def score_word_list(word_list_file, corpus_name, output_file):
+def score_word_list(word_list_file, corpus, output_file):
     word_list = json.load(word_list_file)
-    nltk.download(corpus_name)
+    
+    for c in corpus:
+        nltk.download(c)
 
-    try:
-        corpus = getattr(nltk.corpus, corpus_name)
-    except AttributeError:
-        click.echo(f"Corpus '{corpus_name}' not found.")
-        sys.exit(1)
-
-    freqs = nltk.FreqDist(corpus.words())
+    all_words = itertools.chain.from_iterable(getattr(nltk.corpus, c).words() for c in corpus)
+    freqs = nltk.FreqDist(all_words)
 
     total = 0
     word_freqs = {}
