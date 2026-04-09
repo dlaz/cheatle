@@ -102,7 +102,7 @@ export function expectedRemainingAfterGuess(guess: string, solutions: string[]):
 
 // Threshold constants exported for use in simulation and tests.
 export const MANY_CANDIDATES_THRESHOLD = 200;
-export const FEW_CANDIDATES_THRESHOLD = 8;
+export const FEW_CANDIDATES_THRESHOLD = 20;
 
 /**
  * Sort candidates by one-move lookahead: expected remaining solutions
