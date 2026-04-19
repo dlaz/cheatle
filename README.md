@@ -9,6 +9,56 @@ npm install
 npm run dev
 ```
 
+## Tests
+
+### Unit tests (Jest)
+
+Run unit tests once:
+
+```bash
+npm test
+```
+
+Run tests in watch mode:
+
+```bash
+npm test:watch
+```
+
+### End-to-end tests (Cypress)
+
+Run e2e tests (automatically starts dev server):
+
+```bash
+npm run cypress:test
+```
+
+Run e2e tests with video recording (automatically starts dev server):
+
+```bash
+npm run cypress:test:video
+```
+
+Open Cypress interactive UI (automatically starts dev server):
+
+```bash
+npm run cypress:open
+```
+
+Run e2e tests headless only (automatically starts dev server):
+
+```bash
+npm run cypress:run
+```
+
+Run e2e tests with video recording (automatically starts dev server):
+
+```bash
+npm run cypress:run:video
+```
+
+Videos are saved to `cypress/videos/` for troubleshooting and documentation.
+
 ## Build static site
 
 ```bash

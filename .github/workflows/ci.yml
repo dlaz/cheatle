@@ -48,3 +48,34 @@ jobs:
 
       - name: Build app
         run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgtk-3-0t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libgbm1 libnss3 libnspr4 libxss1 libasound2t64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Cypress tests with video recording
+        run: npm run cypress:run:video
+
+      - name: Upload test videos on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-videos
+          path: cypress/videos/
+          retention-days: 7
