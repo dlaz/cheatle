@@ -286,4 +286,70 @@ describe("GameGrid", () => {
     // eebcd has E at gray position 1 and must be excluded.
     expect(screen.queryByText(/eebcd/i)).not.toBeInTheDocument();
   });
+
+  it("shows a celebration animation on the submitted all-green row", () => {
+    render(<GameGrid />);
+
+    for (const key of ["A", "L", "E", "R", "T"]) {
+      fireEvent.keyDown(window, { key });
+    }
+
+    // Turn every tile green.
+    for (let c = 0; c < 5; c++) {
+      fireEvent.click(screen.getByTestId(`cell-0-${c}`));
+      fireEvent.click(screen.getByTestId(`cell-0-${c}`));
+    }
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(screen.queryByTestId("all-green-easter-egg")).not.toBeInTheDocument();
+    expect(screen.getByTestId("celebration-row-0")).toBeInTheDocument();
+  });
+
+  it("hides suggestions after an early all-green solve", () => {
+    render(<GameGrid />);
+
+    for (const key of ["A", "L", "E", "R", "T"]) {
+      fireEvent.keyDown(window, { key });
+    }
+
+    for (let c = 0; c < 5; c++) {
+      fireEvent.click(screen.getByTestId(`cell-0-${c}`));
+      fireEvent.click(screen.getByTestId(`cell-0-${c}`));
+    }
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    // If suggestions were still shown, row 2 would render as a suggestion row
+    // and not expose normal editable grid test ids.
+    expect(screen.getByTestId("cell-2-0")).toBeInTheDocument();
+  });
+
+  it("hides suggestions below the grid when the bottom guess row is all green", () => {
+    render(<GameGrid />);
+
+    const typeAlert = () => {
+      for (const key of ["A", "L", "E", "R", "T"]) {
+        fireEvent.keyDown(window, { key });
+      }
+    };
+
+    // Submit first five rows as all-green ALERT, locking all columns green.
+    for (let row = 0; row < 5; row++) {
+      typeAlert();
+      if (row === 0) {
+        for (let c = 0; c < 5; c++) {
+          fireEvent.click(screen.getByTestId(`cell-0-${c}`));
+          fireEvent.click(screen.getByTestId(`cell-0-${c}`));
+        }
+      }
+      fireEvent.keyDown(window, { key: "Enter" });
+    }
+
+    // Bottom row (row 5): typing ALERT auto-marks all cells green.
+    typeAlert();
+
+    // Suggestions are hidden, so row 6 renders as a normal editable row.
+    expect(screen.getByTestId("cell-6-0")).toBeInTheDocument();
+  });
 });
