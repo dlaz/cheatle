@@ -232,6 +232,17 @@ export default function GameGrid() {
   };
 
   const submittedRows = useMemo(() => grid.slice(0, currentRow), [grid, currentRow]);
+  const solvedRowIndex = useMemo(
+    () => submittedRows.findIndex((row) => row.every((cell) => cell.letter && cell.color === "green")),
+    [submittedRows]
+  );
+  const shouldHideSuggestionsAfterSolve = useMemo(
+    () =>
+      grid
+        .slice(0, GUESS_ROWS)
+        .some((row) => row.every((cell) => Boolean(cell.letter) && cell.color === "green")),
+    [grid]
+  );
 
   const { candidates, greens, possibleSolutions } = useMemo(() => {
     const greens: (string | null)[] = [null, null, null, null, null];
@@ -386,8 +397,12 @@ export default function GameGrid() {
         </Box>
 
         {grid.map((row, rIdx) => {
-        const isCandidateRow = rIdx > currentRow && candidates.length > (rIdx - currentRow - 1);
+        const isCandidateRow =
+          !shouldHideSuggestionsAfterSolve &&
+          rIdx > currentRow &&
+          candidates.length > (rIdx - currentRow - 1);
         const candidateWord = isCandidateRow ? candidates[rIdx - currentRow - 1] : null;
+        const isSolvedRow = solvedRowIndex >= 0 && rIdx === solvedRowIndex;
 
         if (candidateWord) {
           return (
@@ -434,7 +449,34 @@ export default function GameGrid() {
         }
 
         return (
-          <Box key={rIdx} sx={{ display: "flex", gap: 1 }}>
+          <Box
+            key={rIdx}
+            data-testid={isSolvedRow ? `celebration-row-${rIdx}` : undefined}
+            sx={{
+              display: "flex",
+              gap: 1,
+              position: "relative",
+              ...(isSolvedRow
+                ? {
+                    "&::after": {
+                      content: '""',
+                      position: "absolute",
+                      inset: -8,
+                      borderRadius: 2,
+                      pointerEvents: "none",
+                      boxShadow: "0 0 0 2px rgba(106,170,100,0.7)",
+                      opacity: 0,
+                      animation: "rowVictoryPulse 900ms ease-out 1 forwards",
+                    },
+                    "@keyframes rowVictoryPulse": {
+                      "0%": { transform: "scale(0.98)", opacity: 0.35 },
+                      "65%": { transform: "scale(1.03)", opacity: 0.8 },
+                      "100%": { transform: "scale(1.05)", opacity: 0 },
+                    },
+                  }
+                : {}),
+            }}
+          >
             {row.map((cell, cIdx) => (
               <Paper
                 key={cIdx}
@@ -455,6 +497,18 @@ export default function GameGrid() {
                   fontSize: "2rem",
                   transition: "all 0.2s ease",
                   userSelect: "none",
+                  ...(isSolvedRow
+                    ? {
+                        boxShadow: "0 0 16px rgba(106,170,100,0.6)",
+                        animation: "tileVictoryPop 500ms ease-out both",
+                        animationDelay: `${cIdx * 45}ms`,
+                        "@keyframes tileVictoryPop": {
+                          "0%": { transform: "scale(1)" },
+                          "45%": { transform: "scale(1.12)" },
+                          "100%": { transform: "scale(1)" },
+                        },
+                      }
+                    : {}),
                 }}
               >
                 {cell.letter}
