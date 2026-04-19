@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -83,6 +83,27 @@ export default function GameGrid() {
   const [pastSnapshots, setPastSnapshots] = useState<GameSnapshot[]>([]);
   const [futureSnapshots, setFutureSnapshots] = useState<GameSnapshot[]>([]);
 
+  // Async candidates sorted by the scorer worker (updated off the main thread).
+  // Initialised synchronously using the precomputed O(n) scores so the first
+  // render already has suggestions without waiting for a useEffect.
+  const [candidates, setCandidates] = useState<string[]>(() => {
+    const allWords = Array.isArray(wordsData) ? (wordsData as string[]) : [];
+    return sortCandidates(
+      allWords,
+      scoredWordsData as Record<string, number>,
+      wordByFrequencyData as Record<string, number>
+    );
+  });
+
+  // Web Worker that runs sortCandidates() off the main thread.
+  const workerRef = useRef<Worker | null>(null);
+  // Monotonically increasing request id – incremented on every dispatch so
+  // that stale worker responses (from superseded requests or after Reset/Undo)
+  // are silently ignored.
+  const requestIdRef = useRef(0);
+  // Debounce timer for the O(n²) scoring path.
+  const sortTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (hasInitializedKeyboard) return;
 
@@ -90,6 +111,36 @@ export default function GameGrid() {
     setShowKeyboard(isMobile);
     setHasInitializedKeyboard(true);
   }, [hasInitializedKeyboard, isMobile]);
+
+  // Create the scorer worker once on mount and destroy it on unmount.
+  // Guard against environments that don't support Worker (e.g. jsdom in Jest).
+  useEffect(() => {
+    if (typeof Worker === "undefined") {
+      workerRef.current = null;
+      return;
+    }
+
+    try {
+      const worker = new Worker(
+        new URL("../utils/scorer.worker.ts", import.meta.url),
+        { type: "module" }
+      );
+      worker.onmessage = (e: MessageEvent<{ sorted: string[]; requestId: number }>) => {
+        // Discard responses from superseded requests (e.g. rapid toggles,
+        // Reset, or Undo/Redo that dispatched a later request while this one
+        // was still in flight).
+        if (e.data.requestId !== requestIdRef.current) return;
+        setCandidates(e.data.sorted);
+      };
+      workerRef.current = worker;
+      return () => {
+        worker.terminate();
+        workerRef.current = null;
+      };
+    } catch {
+      workerRef.current = null;
+    }
+  }, []);
 
   const getSnapshot = useCallback(
     (): GameSnapshot => ({
@@ -244,7 +295,11 @@ export default function GameGrid() {
     [grid]
   );
 
-  const { candidates, greens, possibleSolutions } = useMemo(() => {
+  // Cheap synchronous step: filter the word list using the submitted-row
+  // constraints.  This runs on every relevant state change and is O(n·k)
+  // where n = ~13 K words and k = 5 columns – fast enough to keep the
+  // render path smooth.
+  const { filtered, greens, possibleSolutions } = useMemo(() => {
     const greens: (string | null)[] = [null, null, null, null, null];
     const yellows: { char: string; pos: number }[] = [];
     const greys: { char: string; pos: number }[] = [];
@@ -319,17 +374,56 @@ export default function GameGrid() {
       return true;
     });
 
-    // Rank with one-move lookahead. For the initial full-state list,
-    // use precomputed scores to keep the first render responsive.
-    const precomputedScores = submittedRows.length === 0
-      ? (scoredWordsData as Record<string, number>)
-      : undefined;
-    const frequencyScores = wordByFrequencyData as Record<string, number>;
-    const candidates = sortCandidates(filtered, precomputedScores, frequencyScores);
     const possibleSolutions = [...filtered].sort();
 
-    return { candidates, greens, possibleSolutions };
+    return { filtered, greens, possibleSolutions };
   }, [submittedRows]);
+
+  // Expensive async step: rank the filtered candidates with the one-move
+  // lookahead scorer.
+  //
+  // • When no rows have been submitted, the O(n) precomputed-scores path is
+  //   fast enough to run synchronously on the main thread – no debounce needed.
+  // • Once rows exist, each color-toggle triggers this effect. We debounce by
+  //   150 ms so that rapid back-to-back clicks (e.g. marking a whole row)
+  //   collapse into a single O(n²) scoring pass. That pass runs in the
+  //   dedicated scorer Web Worker so the main thread is never blocked.
+  useEffect(() => {
+    if (sortTimerRef.current !== null) {
+      clearTimeout(sortTimerRef.current);
+      sortTimerRef.current = null;
+    }
+
+    if (submittedRows.length === 0) {
+      // Initial state: precomputed O(n) lookup – fast, run immediately.
+      const frequencyScores = wordByFrequencyData as Record<string, number>;
+      const precomputedScores = scoredWordsData as Record<string, number>;
+      setCandidates(sortCandidates(filtered, precomputedScores, frequencyScores));
+      return;
+    }
+
+    // Subsequent states: debounce then dispatch to the worker.
+    sortTimerRef.current = setTimeout(() => {
+      sortTimerRef.current = null;
+      if (workerRef.current) {
+        // Increment only when we're actually sending to the worker so the
+        // counter is never inflated by fallback/no-op paths.
+        const requestId = ++requestIdRef.current;
+        workerRef.current.postMessage({ candidates: filtered, requestId });
+      } else {
+        // Fallback for environments where Worker is unavailable.
+        const frequencyScores = wordByFrequencyData as Record<string, number>;
+        setCandidates(sortCandidates(filtered, undefined, frequencyScores));
+      }
+    }, 150);
+
+    return () => {
+      if (sortTimerRef.current !== null) {
+        clearTimeout(sortTimerRef.current);
+        sortTimerRef.current = null;
+      }
+    };
+  }, [filtered, submittedRows.length]);
 
   return (
     <Box
