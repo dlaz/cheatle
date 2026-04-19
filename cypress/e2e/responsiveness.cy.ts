@@ -6,39 +6,37 @@
  * baseline for verifying future optimizations.
  *
  * ─────────────────────────────────────────────────────────────────────
- * IDENTIFIED BOTTLENECKS
+ * IMPLEMENTATION NOTE (post-optimization)
  * ─────────────────────────────────────────────────────────────────────
  *
- * Bottleneck 1 – sortCandidates() runs synchronously on the React
- *   render thread every time a submitted-row cell color is toggled.
- *   The function performs an O(n²) one-move lookahead across every
- *   candidate word (~2,315 words × 2,315 words = ~5M operations) and
- *   blocks the UI thread while it runs.  See "Color toggle – with
- *   submitted row" below; the delta between the "before submit" and
- *   "after submit" timings isolates this cost.
+ * Two optimizations have been applied to GameGrid:
  *
- * Bottleneck 2 – All 16 grid rows (GUESS_ROWS + SUGGESTION_ROWS) are
- *   always rendered even when only one cell changes. React's diffing
- *   keeps this manageable for a small fixed grid, but the combination
- *   with the synchronous scoring compounds the jank on color toggles.
+ * Optimization 1 – Web Worker for sortCandidates()
+ *   The O(n²) one-move-lookahead scoring that previously ran synchronously
+ *   in a useMemo has been moved to a dedicated Web Worker.  The main thread
+ *   posts the filtered candidate list and receives the sorted result
+ *   asynchronously, so color-toggle clicks and keystrokes never block
+ *   while scoring runs in the background.
+ *
+ * Optimization 2 – 150 ms debounce before dispatching to the worker
+ *   Back-to-back color toggles on the same row (the common case when
+ *   marking 5 cells) collapse into a single scoring pass instead of one
+ *   per click.  The worker receives the latest filtered list only after
+ *   the user has been idle for 150 ms, cutting the number of O(n²) passes
+ *   by ~80 % for the typical "mark a whole row" workflow.
  *
  * ─────────────────────────────────────────────────────────────────────
- * PROPOSED SOLUTIONS
+ * WHAT THE TIMING TESTS MEASURE
  * ─────────────────────────────────────────────────────────────────────
  *
- * Solution 1 – Web Worker for sortCandidates()
- *   Move the expensive one-move-lookahead scoring into a dedicated Web
- *   Worker.  The main thread posts the current candidate list and
- *   receives the sorted result asynchronously, so color toggles and
- *   keystrokes are never blocked. The suggestion rows can show a
- *   loading indicator while the Worker is busy.
+ * Cell color and letter updates are driven by the synchronous `grid` React
+ * state, NOT by the async `candidates` state returned by the worker.  So
+ * these tests measure the perceived responsiveness (how quickly the UI
+ * reflects the user's input), not the background scoring completion time.
  *
- * Solution 2 – Debounce suggestion recomputation
- *   Delay the call to sortCandidates() until the user has been idle
- *   for a short period (e.g. 150 ms). Back-to-back color toggles on
- *   the same row (the common case when marking 5 cells) would then
- *   trigger only a single recomputation instead of five, cutting the
- *   cost by ~80% for typical usage without requiring a Worker.
+ * Before optimization, every color-toggle blocked the UI thread until
+ * sortCandidates() finished (~500–1 000 ms).  After optimization that
+ * block is gone: the visual update is just a setState + re-render.
  */
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -128,7 +126,8 @@ describe("Grid interaction responsiveness", () => {
   it("quantifies color-toggle latency before any row is submitted", () => {
     /**
      * With no submitted rows, sortCandidates() uses the pre-computed full-
-     * state scores (O(n) lookup), so color toggles should be fast.
+     * state scores (O(n) lookup) synchronously, so color toggles are fast.
+     * After optimization this path is unchanged: it's already instant.
      */
     const THRESHOLD_MS = 200;
 
@@ -152,15 +151,20 @@ describe("Grid interaction responsiveness", () => {
 
   // ── 3. Color-toggle latency (WITH submitted rows) ───────────────────────
 
-  it("quantifies color-toggle latency after first row is submitted (exposes sortCandidates bottleneck)", () => {
+  it("quantifies color-toggle latency after first row is submitted (post-optimization: cell updates immediately)", () => {
     /**
-     * After pressing Enter, submittedRows.length becomes 1 and the
-     * useMemo for candidates re-runs with precomputedFullStateScores=undefined,
-     * meaning sortCandidates() must call expectedRemainingAfterGuess() for
-     * every candidate word against every other candidate. This is the main
-     * bottleneck.  The test captures this cost so we can track improvements.
+     * Before optimization: pressing Enter committed the row, then every
+     * subsequent color toggle synchronously re-ran sortCandidates() O(n²),
+     * blocking the main thread for ~500–1 000 ms per click.
+     *
+     * After optimization: the cell color change is driven by the synchronous
+     * `grid` state update (instant). sortCandidates() runs asynchronously in
+     * the scorer Web Worker after a 150 ms debounce, so the UI is never blocked.
+     *
+     * The threshold has been tightened from 1 500 ms → 400 ms to enforce the
+     * post-optimization expectation.
      */
-    const THRESHOLD_MS = 1500; // generous – current implementation may be slow
+    const THRESHOLD_MS = 400;
 
     typeWord("ALERT");
     cy.get('[data-testid="cell-0-4"]').should("contain.text", "T");
@@ -169,7 +173,7 @@ describe("Grid interaction responsiveness", () => {
     cy.get('[data-testid="cell-1-0"]').should("exist");
 
     markStart("toggle-after-submit");
-    cy.get('[data-testid="cell-0-0"]').click(); // toggles a submitted cell → reruns sortCandidates
+    cy.get('[data-testid="cell-0-0"]').click(); // toggles a submitted cell
     cy.get('[data-testid="cell-0-0"]').should(
       "have.css",
       "background-color",
@@ -177,8 +181,8 @@ describe("Grid interaction responsiveness", () => {
     );
 
     measureFrom("toggle-after-submit", (ms) => {
-      cy.log(`Color toggle (with submitted row) – sortCandidates rerun: ${ms.toFixed(1)} ms`);
-      cy.log("NOTE: the gap between this and the 'no submitted rows' test isolates the sortCandidates() cost.");
+      cy.log(`Color toggle (with submitted row): ${ms.toFixed(1)} ms`);
+      cy.log("sortCandidates now runs async in worker after 150 ms debounce – no main-thread block.");
       expect(ms, "toggle with submitted rows").to.be.lessThan(THRESHOLD_MS);
     });
   });
@@ -188,8 +192,8 @@ describe("Grid interaction responsiveness", () => {
   it("quantifies Enter-key latency (row advances within 300 ms)", () => {
     /**
      * Pressing Enter when a row is complete advances currentRow by 1.
-     * This is cheap on its own, but the useMemo for candidates will also
-     * fire (adding a submitted row). We measure the full round-trip.
+     * After optimization, sortCandidates() is debounced + off-thread, so
+     * the row advance is purely a cheap state update + re-render.
      */
     const THRESHOLD_MS = 300;
 
@@ -198,9 +202,6 @@ describe("Grid interaction responsiveness", () => {
 
     markStart("enter-key");
     pressEnter();
-    // The cursor moves to row 1 – cell-1-0 now has a cursor-default style
-    // (empty cell). We can verify the row advanced by checking cell-0-0
-    // is still unchanged and cell-1-0 exists.
     cy.get('[data-testid="cell-1-0"]').should("exist");
 
     measureFrom("enter-key", (ms) => {
@@ -211,16 +212,21 @@ describe("Grid interaction responsiveness", () => {
 
   // ── 5. Rapid back-to-back color toggles (full row marking) ──────────────
 
-  it("quantifies marking all 5 cells in a submitted row (exposes cumulative sortCandidates cost)", () => {
+  it("quantifies marking all 5 cells in a submitted row (post-optimization: visual updates immediate)", () => {
     /**
-     * This is the most common user workflow: type a word, press Enter, then
-     * click each cell to set its Wordle color.  Each click re-runs
-     * sortCandidates(), so 5 toggles = 5 synchronous scoring passes.
+     * Before optimization: 10 clicks → 10 synchronous sortCandidates() passes
+     * back-to-back, each blocking the main thread (~500 ms each = ~5 000 ms).
      *
-     * Solution 2 (debounce) would collapse these into a single pass and is
-     * the quickest win for this specific pattern.
+     * After optimization:
+     * • Each click immediately updates the cell color via setGrid (O(1)).
+     * • The 150 ms debounce resets on every click; sortCandidates runs once
+     *   in the worker 150 ms after the last click.
+     * • The test assertion is on cell color (driven by grid state), so it
+     *   passes as soon as all 10 render cycles complete – no sorting wait.
+     *
+     * The threshold has been tightened from 3 000 ms → 800 ms.
      */
-    const THRESHOLD_MS = 3000; // 5 × up to ~600 ms each in the worst case
+    const THRESHOLD_MS = 800;
 
     typeWord("ALERT");
     cy.get('[data-testid="cell-0-4"]').should("contain.text", "T");
@@ -242,8 +248,7 @@ describe("Grid interaction responsiveness", () => {
     );
 
     measureFrom("mark-full-row", (ms) => {
-      cy.log(`Marking all 5 cells green (10 clicks, 10 sortCandidates reruns): ${ms.toFixed(1)} ms`);
-      cy.log("Solution 1 (Web Worker) or Solution 2 (debounce) would cut this significantly.");
+      cy.log(`Marking all 5 cells green (10 clicks, 1 deferred worker sort): ${ms.toFixed(1)} ms`);
       expect(ms, "full row color marking").to.be.lessThan(THRESHOLD_MS);
     });
   });
