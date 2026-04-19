@@ -12,7 +12,7 @@
  * Bottleneck 1 – sortCandidates() runs synchronously on the React
  *   render thread every time a submitted-row cell color is toggled.
  *   The function performs an O(n²) one-move lookahead across every
- *   candidate word (~2 315 words × 2 315 words = ~5 M operations) and
+ *   candidate word (~2,315 words × 2,315 words = ~5M operations) and
  *   blocks the UI thread while it runs.  See "Color toggle – with
  *   submitted row" below; the delta between the "before submit" and
  *   "after submit" timings isolates this cost.
@@ -38,7 +38,7 @@
  *   for a short period (e.g. 150 ms). Back-to-back color toggles on
  *   the same row (the common case when marking 5 cells) would then
  *   trigger only a single recomputation instead of five, cutting the
- *   cost by ~80 % for typical usage without requiring a Worker.
+ *   cost by ~80% for typical usage without requiring a Worker.
  */
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
