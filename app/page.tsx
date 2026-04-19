@@ -3,6 +3,7 @@
 import React from "react";
 import { ThemeProvider, createTheme, CssBaseline, Container, Typography, Box } from "@mui/material";
 import GameGrid from "./components/GameGrid";
+import { shortCommitSha } from "../lib/config";
 
 const darkTheme = createTheme({
   palette: {
@@ -33,6 +34,16 @@ export default function Page() {
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center' }}>
           <GameGrid />
         </Box>
+
+        {shortCommitSha && (
+          <Typography
+            variant="caption"
+            align="center"
+            sx={{ pt: 2, pb: 1.5, color: 'text.disabled', letterSpacing: '0.08em' }}
+          >
+            build {shortCommitSha}
+          </Typography>
+        )}
       </Container>
     </ThemeProvider>
   );
