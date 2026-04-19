@@ -98,13 +98,16 @@ describe("Grid interaction responsiveness", () => {
   beforeEach(() => {
     cy.visit("/");
     cy.get('[data-testid="cell-0-0"]', { timeout: 10_000 }).should("exist");
+    // Give React time to complete hydration and attach the window keydown
+    // listener so that subsequent cy.get("body").type() calls are handled.
+    cy.wait(500);
   });
 
   // ── 1. Keystroke latency ────────────────────────────────────────────────
 
   it("verifies per-keystroke responsiveness (letter appears in cell)", () => {
     // Warm up – make sure the page is fully interactive before measuring.
-    cy.get("body").click();
+    cy.get("body").click({ force: true });
 
     markStart("keystroke-start");
 
