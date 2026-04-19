@@ -97,6 +97,10 @@ export default function GameGrid() {
 
   // Web Worker that runs sortCandidates() off the main thread.
   const workerRef = useRef<Worker | null>(null);
+  // Monotonically increasing request id – incremented on every dispatch so
+  // that stale worker responses (from superseded requests or after Reset/Undo)
+  // are silently ignored.
+  const requestIdRef = useRef(0);
   // Debounce timer for the O(n²) scoring path.
   const sortTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -111,18 +115,31 @@ export default function GameGrid() {
   // Create the scorer worker once on mount and destroy it on unmount.
   // Guard against environments that don't support Worker (e.g. jsdom in Jest).
   useEffect(() => {
-    if (typeof Worker === "undefined") return;
-    const worker = new Worker(
-      new URL("../utils/scorer.worker.ts", import.meta.url)
-    );
-    worker.onmessage = (e: MessageEvent<string[]>) => {
-      setCandidates(e.data);
-    };
-    workerRef.current = worker;
-    return () => {
-      worker.terminate();
+    if (typeof Worker === "undefined") {
       workerRef.current = null;
-    };
+      return;
+    }
+
+    try {
+      const worker = new Worker(
+        new URL("../utils/scorer.worker.ts", import.meta.url),
+        { type: "module" }
+      );
+      worker.onmessage = (e: MessageEvent<{ sorted: string[]; requestId: number }>) => {
+        // Discard responses from superseded requests (e.g. rapid toggles,
+        // Reset, or Undo/Redo that dispatched a later request while this one
+        // was still in flight).
+        if (e.data.requestId !== requestIdRef.current) return;
+        setCandidates(e.data.sorted);
+      };
+      workerRef.current = worker;
+      return () => {
+        worker.terminate();
+        workerRef.current = null;
+      };
+    } catch {
+      workerRef.current = null;
+    }
   }, []);
 
   const getSnapshot = useCallback(
@@ -389,7 +406,10 @@ export default function GameGrid() {
     sortTimerRef.current = setTimeout(() => {
       sortTimerRef.current = null;
       if (workerRef.current) {
-        workerRef.current.postMessage({ candidates: filtered });
+        // Increment only when we're actually sending to the worker so the
+        // counter is never inflated by fallback/no-op paths.
+        const requestId = ++requestIdRef.current;
+        workerRef.current.postMessage({ candidates: filtered, requestId });
       } else {
         // Fallback for environments where Worker is unavailable.
         const frequencyScores = wordByFrequencyData as Record<string, number>;

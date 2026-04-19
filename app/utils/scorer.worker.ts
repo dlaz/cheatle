@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 /**
  * Scorer Web Worker
  *
@@ -7,11 +8,14 @@
  *
  * Protocol
  * --------
- * Incoming message: { candidates: string[] }
- *   - candidates: the filtered word list to rank
+ * Incoming message: { candidates: string[], requestId: number }
+ *   - candidates:  the filtered word list to rank
+ *   - requestId:   monotonically increasing id echoed back in the response so
+ *                  the main thread can discard stale results
  *
- * Outgoing message: string[]
- *   - the same words in sorted order (best guess first)
+ * Outgoing message: { sorted: string[], requestId: number }
+ *   - sorted:     the same words in sorted order (best guess first)
+ *   - requestId:  echoed back from the incoming message
  */
 
 import { sortCandidates } from "./wordScorer";
@@ -19,16 +23,8 @@ import wordByFrequencyData from "../data/word_by_frequency.json";
 
 const frequencyScores = wordByFrequencyData as Record<string, number>;
 
-// Re-type self for the worker context. TypeScript (via the dom lib) types
-// globalThis.self as Window; we need the DedicatedWorkerGlobalScope API.
-type WorkerGlobal = typeof globalThis & {
-  onmessage: ((e: MessageEvent) => void) | null;
-  postMessage(data: unknown): void;
-};
-
-const workerSelf = self as unknown as WorkerGlobal;
-
-workerSelf.onmessage = (e: MessageEvent<{ candidates: string[] }>) => {
-  const sorted = sortCandidates(e.data.candidates, undefined, frequencyScores);
-  workerSelf.postMessage(sorted);
+self.onmessage = (e: MessageEvent<{ candidates: string[]; requestId: number }>) => {
+  const { candidates, requestId } = e.data;
+  const sorted = sortCandidates(candidates, undefined, frequencyScores);
+  self.postMessage({ sorted, requestId });
 };
