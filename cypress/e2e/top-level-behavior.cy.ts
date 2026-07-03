@@ -12,7 +12,10 @@ describe("Top-level game behavior", () => {
 
   const markRowAllGreen = (row: number) => {
     for (let col = 0; col < 5; col++) {
-      cy.get(`[data-testid="cell-${row}-${col}"]`, { timeout: 10000 }).click().click();
+      cy.get(`[data-testid="cell-${row}-${col}"]`, { timeout: 10000 })
+        .click()
+        .click()
+        .should("have.css", "background-color", "rgb(106, 170, 100)");
     }
   };
 
