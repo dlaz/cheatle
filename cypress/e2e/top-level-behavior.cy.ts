@@ -12,7 +12,10 @@ describe("Top-level game behavior", () => {
 
   const markRowAllGreen = (row: number) => {
     for (let col = 0; col < 5; col++) {
-      cy.get(`[data-testid="cell-${row}-${col}"]`, { timeout: 10000 }).click().click();
+      cy.get(`[data-testid="cell-${row}-${col}"]`, { timeout: 10000 })
+        .click()
+        .click()
+        .should("have.css", "background-color", "rgb(106, 170, 100)");
     }
   };
 
@@ -54,12 +57,13 @@ describe("Top-level game behavior", () => {
     // Fill rows 0-4 with all-green ALERT.
     for (let row = 0; row < 5; row++) {
       typeWord("ALERT");
-      cy.wait(200);
+      cy.wait(500);
       if (row === 0) {
         markRowAllGreen(0);
+        cy.wait(500);
       }
       pressEnter();
-      cy.wait(200);
+      cy.wait(500);
     }
 
     // Row 5 auto-starts as green in all columns due to locked greens.

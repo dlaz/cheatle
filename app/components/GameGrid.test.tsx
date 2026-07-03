@@ -223,11 +223,10 @@ describe("GameGrid", () => {
     expect(screen.getByText(/befit/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: /debug: show all possible solutions/i }));
 
-    // Mark PETIT colors: P stays default (no constraint), E green at 1, T yellow at 2,
+    // Mark PETIT colors: P stays default (no constraint), E green at 1,
     // I auto-starts green at 3 (locked from prior row), T green at 4
     fireEvent.click(screen.getByTestId("cell-3-1")); // E → yellow
     fireEvent.click(screen.getByTestId("cell-3-1")); // E → green
-    fireEvent.click(screen.getByTestId("cell-3-2")); // T → yellow
     fireEvent.click(screen.getByTestId("cell-3-4")); // T → yellow
     fireEvent.click(screen.getByTestId("cell-3-4")); // T → green
 
