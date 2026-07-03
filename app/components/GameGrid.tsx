@@ -20,7 +20,7 @@ import wordsData from '../data/words.json';
 import scoredWordsData from '../data/scored_words.json';
 import wordByFrequencyData from '../data/word_by_frequency.json';
 import OnScreenKeyboard from "./OnScreenKeyboard";
-import { sortCandidates } from "../utils/wordScorer";
+import { getFeedbackPattern, sortCandidates } from "../utils/wordScorer";
 
 type ColorState = "default" | "grey" | "yellow" | "green";
 
@@ -301,24 +301,36 @@ export default function GameGrid() {
   // render path smooth.
   const { filtered, greens, possibleSolutions } = useMemo(() => {
     const greens: (string | null)[] = [null, null, null, null, null];
-    const yellows: { char: string; pos: number }[] = [];
-    const greys: { char: string; pos: number }[] = [];
+    const constraints: { guess: string; pattern: string }[] = [];
 
     // Only process submitted rows (rows before the current row)
     // This way, gray cells only filter after pressing enter
     for (let r = 0; r < submittedRows.length; r++) {
+      let guess = "";
+      let expectedPattern = "";
+      let isComplete = true;
+
       for (let c = 0; c < COLS; c++) {
         const cell = submittedRows[r][c];
-        if (!cell.letter) continue;
-
+        if (!cell.letter) {
+          isComplete = false;
+          break;
+        }
         const char = cell.letter.toLowerCase();
+        guess += char;
+
         if (cell.color === "green") {
           greens[c] = char;
+          expectedPattern += "g";
         } else if (cell.color === "yellow") {
-          yellows.push({ char, pos: c });
-        } else if (cell.color === "default" || cell.color === "grey") {
-          greys.push({ char, pos: c });
+          expectedPattern += "y";
+        } else {
+          expectedPattern += "x";
         }
+      }
+
+      if (isComplete && guess.length === COLS) {
+        constraints.push({ guess, pattern: expectedPattern });
       }
     }
 
@@ -329,45 +341,9 @@ export default function GameGrid() {
 
       const w = word.toLowerCase();
 
-      // Check greens
-      for (let i = 0; i < COLS; i++) {
-        if (greens[i] !== null && w[i] !== greens[i]) {
+      for (const { guess, pattern } of constraints) {
+        if (getFeedbackPattern(guess, w) !== pattern) {
           return false;
-        }
-      }
-
-      // Check yellows
-      for (const y of yellows) {
-        if (w[y.pos] === y.char) return false;
-
-        let foundValidPosition = false;
-        for (let j = 0; j < COLS; j++) {
-          if (w[j] === y.char && j !== y.pos) {
-            foundValidPosition = true;
-            break;
-          }
-        }
-        if (!foundValidPosition) return false;
-      }
-
-      // Check greys
-      for (const g of greys) {
-        // A gray tile always means this exact position cannot contain the letter.
-        if (w[g.pos] === g.char) return false;
-
-        const isAlsoGreenOrYellow = greens.includes(g.char) || yellows.some(y => y.char === g.char);
-
-        if (!isAlsoGreenOrYellow) {
-          if (w.includes(g.char)) return false;
-        } else {
-          let allowedCount = 0;
-          for (let i = 0; i < COLS; i++) {
-            if (greens[i] === g.char) allowedCount++;
-          }
-          allowedCount += yellows.filter(y => y.char === g.char).length;
-
-          const occurrencesInW = w.split('').filter(c => c === g.char).length;
-          if (occurrencesInW > allowedCount) return false;
         }
       }
 
