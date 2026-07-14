@@ -305,6 +305,33 @@ describe("GameGrid", () => {
     expect(screen.getByTestId("celebration-row-0")).toBeInTheDocument();
   });
 
+  it("shows a celebration animation when the 6th guess is all-green", () => {
+    render(<GameGrid />);
+
+    const typeAlert = () => {
+      for (const key of ["A", "L", "E", "R", "T"]) {
+        fireEvent.keyDown(window, { key });
+      }
+    };
+
+    // Submit rows 0-4 without marking any colors.
+    for (let row = 0; row < 5; row++) {
+      typeAlert();
+      fireEvent.keyDown(window, { key: "Enter" });
+    }
+
+    // Row 5 (6th guess): type ALERT and mark every tile green.
+    typeAlert();
+    for (let c = 0; c < 5; c++) {
+      fireEvent.click(screen.getByTestId(`cell-5-${c}`));
+      fireEvent.click(screen.getByTestId(`cell-5-${c}`));
+    }
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(screen.getByTestId("celebration-row-5")).toBeInTheDocument();
+  });
+
   it("hides suggestions after an early all-green solve", () => {
     render(<GameGrid />);
 
