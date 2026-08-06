@@ -10,10 +10,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "cypress:open": "start-server-and-test dev http://localhost:3000 'cypress open'",
-    "cypress:run": "start-server-and-test dev http://localhost:3000 'xvfb-run -a cypress run --browser electron'",
-    "cypress:test": "start-server-and-test dev http://localhost:3000 'xvfb-run -a cypress run --browser electron'",
-    "cypress:run:video": "start-server-and-test dev http://localhost:3000 'xvfb-run -a cypress run --browser electron --config video=true,videoCompression=32'",
-    "cypress:test:video": "start-server-and-test dev http://localhost:3000 'xvfb-run -a cypress run --browser electron --config video=true,videoCompression=32'"
+    "cypress:run": "start-server-and-test dev http://localhost:3000 'cypress run --browser electron'",
+    "cypress:test": "start-server-and-test dev http://localhost:3000 'cypress run --browser electron'",
+    "cypress:run:video": "start-server-and-test dev http://localhost:3000 'cypress run --browser electron --config video=true,videoCompression=32'",
+    "cypress:test:video": "start-server-and-test dev http://localhost:3000 'cypress run --browser electron --config video=true,videoCompression=32'"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

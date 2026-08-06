@@ -188,7 +188,7 @@ export default function GameGrid() {
       const key = rawKey.length === 1 ? rawKey.toUpperCase() : rawKey;
 
       if (key === "Enter") {
-        if (currentCol === COLS && currentRow < GUESS_ROWS - 1) {
+        if (currentCol === COLS && currentRow < GUESS_ROWS) {
           setPastSnapshots((prev) => [...prev, getSnapshot()]);
           setFutureSnapshots([]);
           setCurrentRow((prev) => prev + 1);
@@ -211,7 +211,7 @@ export default function GameGrid() {
       }
 
       if (/^[A-Z]$/.test(key)) {
-        if (currentCol < COLS && currentRow < ROWS) {
+        if (currentCol < COLS && currentRow < GUESS_ROWS) {
           setGrid((prev) => {
             const newGrid = [...prev];
             newGrid[currentRow] = [...newGrid[currentRow]];

@@ -305,6 +305,34 @@ describe("GameGrid", () => {
     expect(screen.getByTestId("celebration-row-0")).toBeInTheDocument();
   });
 
+  it("shows a celebration animation when all tiles are green on the 6th guess", () => {
+    render(<GameGrid />);
+
+    // Guess 1 to 5: guess WRONG so we reach guess 6. Let's just enter ALERT with default grey colors.
+    for (let row = 0; row < 5; row++) {
+      for (const key of ["B", "L", "A", "N", "D"]) {
+        fireEvent.keyDown(window, { key });
+      }
+      fireEvent.keyDown(window, { key: "Enter" });
+    }
+
+    // Guess 6 (row index 5): type ALERT
+    for (const key of ["A", "L", "E", "R", "T"]) {
+      fireEvent.keyDown(window, { key });
+    }
+
+    // Turn every tile green on row 5.
+    for (let c = 0; c < 5; c++) {
+      fireEvent.click(screen.getByTestId(`cell-5-${c}`));
+      fireEvent.click(screen.getByTestId(`cell-5-${c}`));
+    }
+
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    expect(screen.getByTestId("celebration-row-5")).toBeInTheDocument();
+  });
+
+
   it("hides suggestions after an early all-green solve", () => {
     render(<GameGrid />);
 
