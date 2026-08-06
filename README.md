@@ -75,9 +75,11 @@ Required one-time repository settings:
 
 1. In GitHub, open **Settings -> Pages**.
 2. Set **Source** to **GitHub Actions**.
-3. Push to `main` (or manually run the workflow) to deploy.
+3. Push to `main` (or manually run the workflow) to deploy the release site.
+4. Open or update a pull request to publish a prerelease Pages preview for that PR.
 
 The workflow computes the correct base path for both project pages and user/organization pages.
+It also injects the build commit SHA into the UI so deployed builds can be identified quickly.
 
 ## Regenerate word frequency data
 
